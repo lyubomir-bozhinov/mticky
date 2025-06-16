@@ -22,3 +22,29 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+*.ipr
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Application specific
+*.pid
+logs/
+.mticky/
+target/
+
+# Test output
+*.tmp
+*.temp
