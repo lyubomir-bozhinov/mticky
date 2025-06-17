@@ -57,20 +57,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java and GraalVM
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'graalvm'
-          java-version: '17'
-          architecture: ${{ matrix.java_arch }}
-          cache: 'maven'
-          # Use 'jdkFile' to directly provide the URL for GraalVM distribution.
-          # This bypasses auto-resolution issues and ensures specific versions are used.
-          jdkFile: ${{ matrix.graalvm_jdk_url }}
+      - name: Install GraalVM manually
+        run: |
+          curl -L ${{ matrix.graalvm_jdk_url }} -o graalvm.tar.gz
+          mkdir -p /opt/graalvm
+          tar -xvzf graalvm.tar.gz -C /opt/graalvm --strip-components=1
+          echo "/opt/graalvm/bin" >> $GITHUB_PATH
+          java -version  # Verify GraalVM installation
 
       - name: Build native image with Maven
-        # '-Pnative' activates the specific profile in your pom.xml for native image creation.
-        # Tests will run by default.
         run: mvn -B clean package -Pnative
 
       - name: Prepare native executable artifact
