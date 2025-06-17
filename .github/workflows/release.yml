@@ -48,6 +48,7 @@ jobs:
           # GraalVM distribution is required for native image compilation.
           distribution: 'graalvm'
           java-version: '17'
+          graalvm-version: '22.3.0' # Explicitly specify the GraalVM version that corresponds to JDK 17.
           architecture: ${{ matrix.java_arch }}
           cache: 'maven'
 
