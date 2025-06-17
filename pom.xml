@@ -7,7 +7,7 @@
 
     <groupId>com.lyubomirbozhinov</groupId>
     <artifactId>mticky</artifactId>
-    <version>0.2.18</version>
+    <version>0.2.20</version>
     <packaging>jar</packaging>
 
     <name>mticky</name>
@@ -27,7 +27,8 @@
         <mockito.version>5.8.0</mockito.version>
         <wiremock.version>3.0.1</wiremock.version>
         <checkstyle.version>10.12.5</checkstyle.version>
-        <native-build-tools.version>0.9.28</native-build-tools.version> </properties>
+        <native-build-tools.version>0.9.28</native-build-tools.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -183,6 +184,28 @@
             <build>
                 <plugins>
                     <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.1.1</version> <executions>
+                            <execution>
+                                <id>java-agent</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>prepare-package</phase>
+                                <configuration>
+                                    <executable>java</executable>
+                                    <workingDirectory>${project.build.directory}</workingDirectory>
+                                    <arguments>
+                                        <argument>-classpath</argument>
+                                        <classpath/>
+                                        <argument>com.lyubomirbozhinov.mticky.app.MtickyApplication</argument>
+                                    </arguments>
+                                    </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
                         <groupId>org.graalvm.buildtools</groupId>
                         <artifactId>native-maven-plugin</artifactId>
                         <version>${native-build-tools.version}</version>
@@ -198,10 +221,14 @@
                         </executions>
                         <configuration>
                             <mainClass>com.lyubomirbozhinov.mticky.app.MtickyApplication</mainClass>
-                            <fallback>false</fallback> <buildArgs>
+                            <fallback>false</fallback>
+                            <agent>
+                                <enabled>true</enabled>
+                            </agent>
+                            <buildArgs>
                                 <arg>--no-fallback</arg>
                                 <arg>-H:+UseServiceLoaderFeature</arg>
-                                </buildArgs>
+                            </buildArgs>
                         </configuration>
                     </plugin>
                 </plugins>
