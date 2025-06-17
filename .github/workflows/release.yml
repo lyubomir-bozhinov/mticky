@@ -14,30 +14,44 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux AMD64 build - should auto-resolve GraalVM successfully
           - runs-on: ubuntu-latest
             target_os: linux
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
             java_arch: x64
+            graalvm_jdk_url: '' # No specific URL needed, rely on auto-resolution
+
+          # Windows AMD64 build - should auto-resolve GraalVM successfully
           - runs-on: windows-latest
             target_os: windows
             target_arch: amd64
             ext: ".exe"
             archive_format: zip
             java_arch: x64
+            graalvm_jdk_url: '' # No specific URL needed, rely on auto-resolution
+
+          # macOS AMD64 (Intel) build - should auto-resolve GraalVM successfully
           - runs-on: macos-latest
             target_os: darwin
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
             java_arch: x64
+            graalvm_jdk_url: '' # No specific URL needed, rely on auto-resolution
+
+          # TODO: Fix special case for macOS ARM64 (Apple Silicon)
+          # Due to observed resolution issues with actions/setup-java@v4 for GraalVM 17 AArch64.
+          # We provide a direct download URL using 'jdkFile'.
           - runs-on: macos-latest
             target_os: darwin
             target_arch: arm64
             ext: ""
             archive_format: tar.gz
             java_arch: aarch64
+            # Direct download URL for GraalVM Community Edition 22.3.0 (JDK 17) for macOS AArch64
+            graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-darwin-aarch64-22.3.0.tar.gz'
 
     steps:
       - uses: actions/checkout@v4
@@ -45,12 +59,15 @@ jobs:
       - name: Set up Java and GraalVM
         uses: actions/setup-java@v4
         with:
-          # GraalVM distribution is required for native image compilation.
+          # If 'graalvm_jdk_url' is provided in the matrix, 'jdkFile' will use it.
+          # Otherwise, 'distribution', 'java-version', and 'architecture' will be used for auto-resolution.
           distribution: 'graalvm'
           java-version: '17'
-          graalvm-version: '22.3.0' # Explicitly specify the GraalVM version that corresponds to JDK 17.
           architecture: ${{ matrix.java_arch }}
           cache: 'maven'
+          # Use 'jdkFile' to directly provide the URL for specific problematic builds.
+          # The '|| ''' ensures that 'jdkFile' is only passed if 'graalvm_jdk_url' is not empty.
+          jdkFile: ${{ matrix.graalvm_jdk_url || '' }}
 
       - name: Build native image with Maven
         # '-Pnative' activates the specific profile in your pom.xml for native image creation.
@@ -70,10 +87,8 @@ jobs:
           cp "$EXECUTABLE_PATH" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
 
           if [[ "${{ matrix.archive_format }}" == "zip" ]]; then
-            # '-j' ensures only the executable itself is stored in the zip, not its directory path.
             zip -j "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
           else
-            # '-C' changes directory before adding, so tar doesn't include 'native-release-artifacts/' in the path.
             tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME"
           fi
           
@@ -154,3 +169,4 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
