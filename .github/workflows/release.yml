@@ -99,10 +99,11 @@ jobs:
           mkdir -p native-release-artifacts
           cp "$EXECUTABLE_PATH" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
           
+          # Use 7z on Windows for zipping as 'zip' command is often not found
           if [[ "${{ matrix.archive_format }}" == "zip" ]]; then
-            zip -j "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME" # '-j' flattens directory structure in zip
+            7z a -tzip "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
           else
-            tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME" # '-C' changes directory for tar
+            tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME"
           fi
           
           echo "ARCHIVE_PATH=native-release-artifacts/$OUTPUT_ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
