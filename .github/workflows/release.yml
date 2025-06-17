@@ -1,0 +1,155 @@
+name: Release Binaries & JAR
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+\.[0-9]+\.[0-9]+'
+
+jobs:
+  build_native:
+    name: Build Native Executable (${{ matrix.target_os }}-${{ matrix.target_arch }})
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      # Allows other platform builds to continue even if one fails.
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            target_os: linux
+            target_arch: amd64
+            ext: ""
+            archive_format: tar.gz
+            java_arch: x64
+          - runs-on: windows-latest
+            target_os: windows
+            target_arch: amd64
+            ext: ".exe"
+            archive_format: zip
+            java_arch: x64
+          - runs-on: macos-latest
+            target_os: darwin
+            target_arch: amd64
+            ext: ""
+            archive_format: tar.gz
+            java_arch: x64
+          - runs-on: macos-latest
+            target_os: darwin
+            target_arch: arm64
+            ext: ""
+            archive_format: tar.gz
+            java_arch: aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java and GraalVM
+        uses: actions/setup-java@v4
+        with:
+          # GraalVM distribution is required for native image compilation.
+          distribution: 'graalvm'
+          java-version: '17'
+          architecture: ${{ matrix.java_arch }}
+          cache: 'maven'
+
+      - name: Build native image with Maven
+        # '-Pnative' activates the specific profile in your pom.xml for native image creation.
+        # Tests will run by default.
+        run: mvn -B clean package -Pnative
+
+      - name: Prepare native executable artifact
+        id: prepare_native_artifact
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PROJECT_NAME="mticky"
+          EXECUTABLE_SOURCE_NAME="$PROJECT_NAME${{ matrix.ext }}"
+          EXECUTABLE_PATH="target/$EXECUTABLE_SOURCE_NAME"
+          OUTPUT_ARCHIVE_NAME="${PROJECT_NAME}-${VERSION}-${{ matrix.target_os }}-${{ matrix.target_arch }}.${{ matrix.archive_format }}"
+          
+          mkdir -p native-release-artifacts
+          cp "$EXECUTABLE_PATH" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
+
+          if [[ "${{ matrix.archive_format }}" == "zip" ]]; then
+            # '-j' ensures only the executable itself is stored in the zip, not its directory path.
+            zip -j "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
+          else
+            # '-C' changes directory before adding, so tar doesn't include 'native-release-artifacts/' in the path.
+            tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME"
+          fi
+          
+          echo "ARCHIVE_PATH=native-release-artifacts/$OUTPUT_ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
+          echo "ARTIFACT_NAME=${PROJECT_NAME}-${{ matrix.target_os }}-${{ matrix.target_arch }}-native-executable" >> "$GITHUB_OUTPUT"
+
+      - name: Upload native executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prepare_native_artifact.outputs.ARTIFACT_NAME }}
+          path: ${{ steps.prepare_native_artifact.outputs.ARCHIVE_PATH }}
+
+  build_jar:
+    name: Build Cross-Platform JAR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin' # Temurin provides a standard OpenJDK distribution suitable for JARs.
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Build with Maven
+        # Builds the standard JAR. Tests will run by default.
+        run: mvn -B clean package
+
+      - name: Create JAR distribution archives
+        id: create_jar_archives
+        run: |
+          cd target
+          VERSION="${GITHUB_REF_NAME}"
+          VERSION_NO_V="${VERSION#v}"
+          ARCHIVE_NAME_PREFIX="mticky-${{ github.ref_name }}"
+          JAR_NAME="mticky-${VERSION_NO_V}.jar"
+          
+          mkdir -p ../jar-release-artifacts
+          zip -j "../jar-release-artifacts/${ARCHIVE_NAME_PREFIX}.zip" "$JAR_NAME"
+          tar -czf "../jar-release-artifacts/${ARCHIVE_NAME_PREFIX}.tar.gz" -C . "$JAR_NAME"
+
+          echo "JAR_ZIP_PATH=../jar-release-artifacts/${ARCHIVE_NAME_PREFIX}.zip" >> "$GITHUB_OUTPUT"
+          echo "JAR_TAR_PATH=../jar-release-artifacts/${ARCHIVE_NAME_PREFIX}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Upload JAR artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mticky-jar-artifacts
+          path: jar-release-artifacts/
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    # This job must wait for both native and JAR builds to complete successfully.
+    needs: [build_native, build_jar]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Downloads all artifacts into subdirectories, ready for attachment.
+          path: all-binaries
+
+      - name: List downloaded files (for debugging purposes)
+        run: ls -R all-binaries
+
+      - id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          # This pattern recursively matches all .zip and .tar.gz files downloaded by download-artifact.
+          files: |
+            all-binaries/**/*.zip
+            all-binaries/**/*.tar.gz
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
