@@ -10,98 +10,85 @@ jobs:
     name: Build Native Executable (${{ matrix.target_os }}-${{ matrix.target_arch }})
     runs-on: ${{ matrix.runs-on }}
     strategy:
-      # Allows other platform builds to continue even if one fails.
-      fail-fast: false
+      fail-fast: false # Allows other platform builds to continue even if one fails.
       matrix:
         include:
-          # Linux AMD64 build
+          # Linux AMD64 build configuration
           - runs-on: ubuntu-latest
             target_os: linux
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
             java_arch: x64
-            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for Linux AMD64
             graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-linux-amd64-22.3.0.tar.gz'
 
-          # Windows AMD64 build
+          # Windows AMD64 build configuration
           - runs-on: windows-latest
             target_os: windows
             target_arch: amd64
             ext: ".exe"
             archive_format: zip
             java_arch: x64
-            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for Windows AMD64
             graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-windows-amd64-22.3.0.zip'
 
-          # macOS AMD64 (Intel) build
+          # macOS AMD64 (Intel) build configuration
           - runs-on: macos-latest
             target_os: darwin
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
             java_arch: x64
-            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for macOS AMD64
             graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-darwin-amd64-22.3.0.tar.gz'
 
-          # macOS ARM64 (Apple Silicon) build
+          # macOS ARM64 (Apple Silicon) build configuration
           - runs-on: macos-latest
             target_os: darwin
             target_arch: arm64
             ext: ""
             archive_format: tar.gz
             java_arch: aarch64
-            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for macOS AArch64
             graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-darwin-aarch64-22.3.0.tar.gz'
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install GraalVM manually
+        shell: bash
         run: |
-          # Define installation directory within the home directory to avoid permission issues
-          INSTALL_DIR="$HOME/graalvm" 
+          INSTALL_DIR="$HOME/graalvm" # Use home directory to avoid permission issues
           
-          echo "Downloading GraalVM from ${{ matrix.graalvm_jdk_url }}"
-          # -L for follow redirects, -f for fail silently on server errors, -o for output file
           curl -L -f -o graalvm.tar.gz "${{ matrix.graalvm_jdk_url }}" || { echo "::error::Failed to download GraalVM from URL"; exit 1; }
-          
-          echo "Creating installation directory: $INSTALL_DIR"
           mkdir -p "$INSTALL_DIR" || { echo "::error::Failed to create installation directory"; exit 1; }
-          
-          echo "Extracting GraalVM to: $INSTALL_DIR"
-          # -x extract, -z for gzip (if .gz), -v verbose, -f for file, -C change dir, --strip-components=1 to remove top-level folder
           tar -xvzf graalvm.tar.gz -C "$INSTALL_DIR" --strip-components=1 || { echo "::error::Failed to extract GraalVM archive"; exit 1; }
+          rm graalvm.tar.gz # Clean up downloaded archive
+
+          # Set environment variables for the current shell session
+          export JAVA_HOME="$INSTALL_DIR"
+          export PATH="$INSTALL_DIR/bin:$PATH" # Prepend to PATH to ensure GraalVM is found first
           
-          echo "Removing temporary download file."
-          rm graalvm.tar.gz
+          # Set for subsequent steps in the job
+          echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
+          echo "PATH=$PATH" >> $GITHUB_ENV
 
-          # Set environment variables for the current and subsequent steps
-          # Setting JAVA_HOME
-          echo "Setting JAVA_HOME to $INSTALL_DIR"
-          echo "JAVA_HOME=$INSTALL_DIR" >> $GITHUB_ENV
+          java -version # Verify Java installation is GraalVM
           
-          # Prepending GraalVM's bin directory to PATH to ensure it's found first
-          echo "Prepending $INSTALL_DIR/bin to PATH"
-          echo "PATH=$INSTALL_DIR/bin:$PATH" >> $GITHUB_ENV
-
-          echo "GraalVM manual setup complete."
-          java -version # Verify Java installation
-
-          # Install native-image component using GraalVM Updater (gu) if not already present.
-          echo "Checking for and installing native-image component if necessary..."
-          if gu install native-image; then
-            echo "Native-image installation succeeded (or was already present)."
+          # Check and install native-image component using GraalVM Updater (gu)
+          # First, check if 'gu' itself is available, then attempt to install native-image.
+          if command -v gu &> /dev/null; then
+              echo "gu command found. Checking for and installing native-image component if necessary..."
+              if gu install native-image; then
+                  echo "Native-image installation succeeded (or was already present)."
+              else
+                  echo "::warning::Failed to install native-image via 'gu'. This might indicate a problem."
+              fi
           else
-            echo "::warning::Failed to install native-image via 'gu'. This might indicate a problem, but sometimes it's already installed. Proceeding anyway."
+              echo "::warning::'gu' command not found. Cannot automatically install native-image. Assuming it's bundled or will fail later."
           fi
           
           native-image --version # Verify native-image tool installation
 
       - name: Build native image with Maven
-        # '-Pnative' activates the specific profile in your pom.xml for native image creation.
-        # Tests will run by default.
-        run: mvn -B clean package -Pnative
+        run: mvn -B clean package -Pnative # '-Pnative' activates native image compilation
 
       - name: Prepare native executable artifact
         id: prepare_native_artifact
@@ -116,11 +103,9 @@ jobs:
           cp "$EXECUTABLE_PATH" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
 
           if [[ "${{ matrix.archive_format }}" == "zip" ]]; then
-            # '-j' ensures only the executable itself is stored in the zip, not its directory path.
-            zip -j "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
+            zip -j "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME" # '-j' flattens directory structure in zip
           else
-            # '-C' changes directory before adding, so tar doesn't include 'native-release-artifacts/' in the path.
-            tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME"
+            tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME" # '-C' changes directory for tar
           fi
           
           echo "ARCHIVE_PATH=native-release-artifacts/$OUTPUT_ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
@@ -141,20 +126,19 @@ jobs:
       - name: Setup Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin' # Temurin provides a standard OpenJDK distribution suitable for JARs.
+          distribution: 'temurin' # Temurin provides a standard OpenJDK for JARs
           java-version: '17'
           cache: 'maven'
 
       - name: Build with Maven
-        # Builds the standard JAR. Tests will run by default.
-        run: mvn -B clean package
+        run: mvn -B clean package # Builds the standard JAR
 
       - name: Create JAR distribution archives
         id: create_jar_archives
         run: |
           cd target
           VERSION="${GITHUB_REF_NAME}"
-          VERSION_NO_V="${VERSION#v}"
+          VERSION_NO_V="${VERSION#v}" # Remove 'v' prefix from version
           ARCHIVE_NAME_PREFIX="mticky-${{ github.ref_name }}"
           JAR_NAME="mticky-${VERSION_NO_V}.jar"
           
@@ -174,17 +158,15 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    # This job must wait for both native and JAR builds to complete successfully.
-    needs: [build_native, build_jar]
+    needs: [build_native, build_jar] # Ensures native and JAR builds complete first
     permissions:
-      contents: write
+      contents: write # Required to create a release
 
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          # Downloads all artifacts into subdirectories, ready for attachment.
-          path: all-binaries
+          path: all-binaries # Downloads all artifacts into subdirectories
 
       - name: List downloaded files (for debugging purposes)
         run: ls -R all-binaries
@@ -192,7 +174,6 @@ jobs:
       - id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          # This pattern recursively matches all .zip and .tar.gz files downloaded by download-artifact.
           files: |
             all-binaries/**/*.zip
             all-binaries/**/*.tar.gz
