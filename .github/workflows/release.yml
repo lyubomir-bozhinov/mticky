@@ -77,12 +77,25 @@ jobs:
           rm graalvm.tar.gz
 
           # Set environment variables for the current and subsequent steps
+          # Setting JAVA_HOME
           echo "Setting JAVA_HOME to $INSTALL_DIR"
           echo "JAVA_HOME=$INSTALL_DIR" >> $GITHUB_ENV
-          echo "$INSTALL_DIR/bin" >> $GITHUB_PATH
+          
+          # Prepending GraalVM's bin directory to PATH to ensure it's found first
+          echo "Prepending $INSTALL_DIR/bin to PATH"
+          echo "PATH=$INSTALL_DIR/bin:$PATH" >> $GITHUB_ENV
 
           echo "GraalVM manual setup complete."
           java -version # Verify Java installation
+
+          # Install native-image component using GraalVM Updater (gu) if not already present.
+          echo "Checking for and installing native-image component if necessary..."
+          if gu install native-image; then
+            echo "Native-image installation succeeded (or was already present)."
+          else
+            echo "::warning::Failed to install native-image via 'gu'. This might indicate a problem, but sometimes it's already installed. Proceeding anyway."
+          fi
+          
           native-image --version # Verify native-image tool installation
 
       - name: Build native image with Maven
