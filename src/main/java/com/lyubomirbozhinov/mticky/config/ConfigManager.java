@@ -1,4 +1,4 @@
-package com.example.mticky.config;
+package com.lyubomirbozhinov.mticky.config;
 
 import java.io.IOException;
 import java.io.InputStream;

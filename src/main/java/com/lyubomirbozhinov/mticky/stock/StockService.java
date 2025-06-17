@@ -1,4 +1,4 @@
-package com.example.mticky.stock;
+package com.lyubomirbozhinov.mticky.stock;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

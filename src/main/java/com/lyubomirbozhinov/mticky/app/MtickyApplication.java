@@ -1,7 +1,7 @@
-package com.example.mticky.app;
+package com.lyubomirbozhinov.mticky.app;
 
-import com.example.mticky.config.ConfigManager;
-import com.example.mticky.tui.StockMonitorTui;
+import com.lyubomirbozhinov.mticky.config.ConfigManager;
+import com.lyubomirbozhinov.mticky.tui.StockMonitorTui;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;

@@ -1,9 +1,9 @@
-package com.example.mticky.tui;
+package com.lyubomirbozhinov.mticky.tui;
 
-import com.example.mticky.api.FinnhubClient;
-import com.example.mticky.config.ConfigManager;
-import com.example.mticky.stock.StockQuote;
-import com.example.mticky.stock.StockService;
+import com.lyubomirbozhinov.mticky.api.FinnhubClient;
+import com.lyubomirbozhinov.mticky.config.ConfigManager;
+import com.lyubomirbozhinov.mticky.stock.StockQuote;
+import com.lyubomirbozhinov.mticky.stock.StockService;
 import com.googlecode.lanterna.TerminalPosition;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.gui2.BasicWindow;

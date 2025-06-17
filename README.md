@@ -46,7 +46,7 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/example/mticky.git
+   git clone https://github.com/lyubomir-bozhinov/mticky.git
    cd mticky
    ```
 
@@ -150,7 +150,7 @@ mvn clean test jacoco:report
 The application follows clean architecture principles:
 
 ```
-src/main/java/com/example/mticky/
+src/main/java/com/lyubomirbozhinov/mticky/
 ├── app/           # Application entry point and CLI handling
 ├── tui/           # Terminal UI components (Lanterna)
 ├── stock/         # Business logic and data models
@@ -213,7 +213,7 @@ Free tier includes:
 
 ### Logging
 
-Application logs are stored in `~/.mticky/logs/app.log` with automatic daily rotation.
+Application logs are stored in `~/.mticky/logs/app.log` with automatic rotation.
 
 **Log Levels:**
 - `ERROR`: Critical failures requiring attention
@@ -263,7 +263,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for deta
 4. **Run the development version:**
    ```bash
    export FINNHUB_API_KEY="your_api_key"
-   mvn compile exec:java -Dexec.mainClass="com.example.mticky.app.MtickyApplication"
+   mvn compile exec:java -Dexec.mainClass="com.lyubomirbozhinov.mticky.app.MtickyApplication"
    ```
 
 ### Code Standards
@@ -286,10 +286,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📧 **Email**: support@mticky.example.com
-- 🐛 **Issues**: [GitHub Issues](https://github.com/example/mticky/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/example/mticky/discussions)
-- 📖 **Wiki**: [GitHub Wiki](https://github.com/example/mticky/wiki)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/lyubomir-bozhinov/mticky/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/lyubomir-bozhinov/mticky/discussions)
 
 ---
 

@@ -1,4 +1,4 @@
-package com.example.mticky.stock;
+package com.lyubomirbozhinov.mticky.stock;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;

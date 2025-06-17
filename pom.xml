@@ -5,14 +5,14 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     
-    <groupId>com.example</groupId>
+    <groupId>com.lyubomirbozhinov</groupId>
     <artifactId>mticky</artifactId>
-    <version>1.0.0</version>
+    <version>0.1.1</version>
     <packaging>jar</packaging>
     
     <name>mticky</name>
-    <description>A production-ready Java TUI stock monitor using Finnhub API</description>
-    <url>https://github.com/example/mticky</url>
+    <description>A simple Java stock monitor for terminal dwellers</description>
+    <url>https://github.com.lyubomir-bozhinov/mticky</url>
     
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -121,7 +121,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>com.example.mticky.app.MtickyApplication</mainClass>
+                            <mainClass>com.lyubomirbozhinov.mticky.app.MtickyApplication</mainClass>
                         </manifest>
                     </archive>
                     <finalName>mticky</finalName>

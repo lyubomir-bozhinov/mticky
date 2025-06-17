@@ -1,10 +1,10 @@
-package com.example.mticky.stock;
+package com.lyubomirbozhinov.mticky.stock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.Instant; // Import Instant for dummy timestamp values
+import java.time.Instant; // for dummy timestamp values
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

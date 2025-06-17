@@ -1,9 +1,9 @@
-package com.example.mticky.api;
+package com.lyubomirbozhinov.mticky.api;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.example.mticky.stock.StockQuote;
+import com.lyubomirbozhinov.mticky.stock.StockQuote;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import java.io.IOException;

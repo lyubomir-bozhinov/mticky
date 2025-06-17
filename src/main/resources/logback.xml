@@ -34,7 +34,7 @@
     </root>
     
     <!-- Specific loggers -->
-    <logger name="com.example.mticky" level="DEBUG" additivity="false">
+    <logger name="com.lyubomirbozhinov.mticky" level="DEBUG" additivity="false">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="FILE" />
     </logger>

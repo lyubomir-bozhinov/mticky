@@ -43,7 +43,7 @@ This project adheres to a code of conduct that we expect all contributors to fol
 
 3. **Add upstream remote:**
    ```bash
-   git remote add upstream https://github.com/example/mticky.git
+   git remote add upstream https://github.com/lyubomir-bozhinov/mticky.git
    ```
 
 4. **Install dependencies:**
@@ -122,13 +122,13 @@ We follow the **Google Java Style Guide** with these additions:
 ```java
 // 1. License header (if applicable)
 // 2. Package declaration
-package com.example.mticky.stock;
+package com.lyubomirbozhinov.mticky.stock;
 
 // 3. Imports (grouped and sorted)
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.example.mticky.api.FinnhubClient;
+import com.lyubomirbozhinov.mticky.api.FinnhubClient;
 import org.slf4j.Logger;
 
 // 4. Class documentation
@@ -152,7 +152,7 @@ public class StockService {
 - **Methods**: camelCase (`getStockQuote`, `calculatePercentChange`)
 - **Variables**: camelCase (`stockPrice`, `lastUpdated`)
 - **Constants**: SCREAMING_SNAKE_CASE (`MAX_RETRIES`, `DEFAULT_TIMEOUT`)
-- **Packages**: lowercase with dots (`com.example.mticky.stock`)
+- **Packages**: lowercase with dots (`com.lyubomirbozhinov.mticky.stock`)
 
 #### Method Documentation
 
@@ -205,7 +205,7 @@ try {
 Follow the existing package organization:
 
 ```
-com.example.mticky/
+com.lyubomirbozhinov.mticky/
 ├── app/           # Application entry point, CLI parsing
 ├── tui/           # User interface components
 ├── stock/         # Business logic and data models
@@ -293,16 +293,23 @@ class FinnhubClientIntegrationTest {
         .build();
     
     @Test
-    void shouldHandleRateLimitGracefully() {
-        // Given
-        wireMock.stubFor(get(urlPathEqualTo("/api/v1/quote"))
-            .willReturn(aResponse().withStatus(429)));
-        
-        // When & Then
-        assertDoesNotThrow(() -> {
-            client.getStockQuote("AAPL").get(5, SECONDS);
-        });
-    }
++    void testGetStockQuoteRateLimitExhaustedRetries() throws ExecutionException, InterruptedException, TimeoutException {
++        // Given a mock for rate limit response
++        wireMockServer.stubFor(get(urlPathEqualTo("/quote"))
++                .willReturn(aResponse()
++                        .withStatus(429)
++                        .withHeader("Retry-After", "1") // Short retry time for tests
++                        .withBody("Rate limit exceeded. Retry after: 1s")));
++
++        // When the client attempts to fetch a quote
++        CompletableFuture<Optional<StockQuote>> future = finnhubClient.getStockQuote("AAPL");
++
++        // Then, after exhausting retries, it should return an empty Optional
++        // The timeout should be long enough to allow all retries (e.g., 10 seconds for 3 retries with 1s delays)
++        Optional<StockQuote> result = future.get(10, TimeUnit.SECONDS);
++
++        assertFalse(result.isPresent(), "Expected Optional.empty() after exhausting rate limit retries.");
++    }
 }
 ```
 
@@ -390,11 +397,12 @@ open target/site/jacoco/index.html
 - **Clear title**: Summarize the change in 50 characters or less
 - **Detailed description**: Explain what, why, and how
 - **Link issues**: Use "Fixes #123" or "Relates to #456"
+- **Conventional commits**: Because they make sense.
 
 #### Example PR Description
 ```markdown
 ## Summary
-Add support for cryptocurrency symbols in stock watchlist
+feat: add support for cryptocurrency symbols in stock watchlist
 
 ## Changes
 - Extended StockService to validate crypto symbols (BTC, ETH, etc.)

@@ -1,4 +1,4 @@
-package com.example.mticky.config;
+package com.lyubomirbozhinov.mticky.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 

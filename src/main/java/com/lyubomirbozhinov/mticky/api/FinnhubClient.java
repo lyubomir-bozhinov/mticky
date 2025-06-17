@@ -1,6 +1,6 @@
-package com.example.mticky.api;
+package com.lyubomirbozhinov.mticky.api;
 
-import com.example.mticky.stock.StockQuote;
+import com.lyubomirbozhinov.mticky.stock.StockQuote;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
