@@ -14,43 +14,44 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux AMD64 build - should auto-resolve GraalVM successfully
+          # Linux AMD64 build
           - runs-on: ubuntu-latest
             target_os: linux
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
             java_arch: x64
-            graalvm_jdk_url: '' # No specific URL needed, rely on auto-resolution
+            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for Linux AMD64
+            graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-linux-amd64-22.3.0.tar.gz'
 
-          # Windows AMD64 build - should auto-resolve GraalVM successfully
+          # Windows AMD64 build
           - runs-on: windows-latest
             target_os: windows
             target_arch: amd64
             ext: ".exe"
             archive_format: zip
             java_arch: x64
-            graalvm_jdk_url: '' # No specific URL needed, rely on auto-resolution
+            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for Windows AMD64
+            graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-windows-amd64-22.3.0.zip'
 
-          # macOS AMD64 (Intel) build - should auto-resolve GraalVM successfully
+          # macOS AMD64 (Intel) build
           - runs-on: macos-latest
             target_os: darwin
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
             java_arch: x64
-            graalvm_jdk_url: '' # No specific URL needed, rely on auto-resolution
+            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for macOS AMD64
+            graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-darwin-amd64-22.3.0.tar.gz'
 
-          # TODO: Fix special case for macOS ARM64 (Apple Silicon)
-          # Due to observed resolution issues with actions/setup-java@v4 for GraalVM 17 AArch64.
-          # We provide a direct download URL using 'jdkFile'.
+          # macOS ARM64 (Apple Silicon) build
           - runs-on: macos-latest
             target_os: darwin
             target_arch: arm64
             ext: ""
             archive_format: tar.gz
             java_arch: aarch64
-            # Direct download URL for GraalVM Community Edition 22.3.0 (JDK 17) for macOS AArch64
+            # Explicit URL for GraalVM CE 22.3.0 (JDK 17) for macOS AArch64
             graalvm_jdk_url: 'https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.3.0/graalvm-ce-java17-darwin-aarch64-22.3.0.tar.gz'
 
     steps:
@@ -59,15 +60,13 @@ jobs:
       - name: Set up Java and GraalVM
         uses: actions/setup-java@v4
         with:
-          # If 'graalvm_jdk_url' is provided in the matrix, 'jdkFile' will use it.
-          # Otherwise, 'distribution', 'java-version', and 'architecture' will be used for auto-resolution.
           distribution: 'graalvm'
           java-version: '17'
           architecture: ${{ matrix.java_arch }}
           cache: 'maven'
-          # Use 'jdkFile' to directly provide the URL for specific problematic builds.
-          # The '|| ''' ensures that 'jdkFile' is only passed if 'graalvm_jdk_url' is not empty.
-          jdkFile: ${{ matrix.graalvm_jdk_url || '' }}
+          # Use 'jdkFile' to directly provide the URL for GraalVM distribution.
+          # This bypasses auto-resolution issues and ensures specific versions are used.
+          jdkFile: ${{ matrix.graalvm_jdk_url }}
 
       - name: Build native image with Maven
         # '-Pnative' activates the specific profile in your pom.xml for native image creation.
@@ -87,8 +86,10 @@ jobs:
           cp "$EXECUTABLE_PATH" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
 
           if [[ "${{ matrix.archive_format }}" == "zip" ]]; then
+            # '-j' ensures only the executable itself is stored in the zip, not its directory path.
             zip -j "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
           else
+            # '-C' changes directory before adding, so tar doesn't include 'native-release-artifacts/' in the path.
             tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME"
           fi
           
