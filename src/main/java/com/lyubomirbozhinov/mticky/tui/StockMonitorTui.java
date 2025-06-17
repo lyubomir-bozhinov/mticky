@@ -128,7 +128,17 @@ public class StockMonitorTui {
      */
     private void initializeTerminal() throws IOException {
         logger.debug("Initializing terminal...");
-        terminal = new DefaultTerminalFactory().createTerminal();
+        
+        DefaultTerminalFactory terminalFactory = new DefaultTerminalFactory();
+
+        if (System.getenv("CI") != null && System.getenv("CI").equalsIgnoreCase("true")) {
+            System.out.println("MTICKY: Detected CI environment, creating HeadlessTerminal for agent data collection.");
+            terminal = terminalFactory.createHeadlessTerminal();
+        } else {
+            System.out.println("MTICKY: Not in CI environment, creating default Terminal.");
+            terminal = terminalFactory.createTerminal();
+        }
+
         screen = new TerminalScreen(terminal);
         screen.startScreen(); // Explicitly start the screen as in the Hello World example
 
