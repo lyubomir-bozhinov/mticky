@@ -57,32 +57,48 @@ jobs:
       - name: Setup GraalVM JDK
         uses: graalvm/setup-graalvm@v1
         with:
-          # Specify the JDK version. This action will find the correct GraalVM distribution.
           java-version: '17' 
-          # Use 'graalvm' for GraalVM Community Edition or 'oracle' for Oracle GraalVM (requires license details)
           distribution: 'graalvm'
-          # Automatically install the native-image component for compilation
           native-image: true
-          # Optional: Provides detailed build reports in the job summary (useful for debugging performance)
-          # native-image-job-reports: 'true'
-          # Optional: Helps with GitHub API rate limits if many downloads are happening
-          # github-token: ${{ secrets.GITHUB_TOKEN }} 
 
       - name: Build native image with Maven
         run: mvn -B clean package -Pnative # '-Pnative' activates native image compilation
 
       - name: Prepare native executable artifact
         id: prepare_native_artifact
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME}"
           PROJECT_NAME="mticky"
+          
+          # Debug: List contents of target/ to find the exact executable name
+          echo "Listing contents of target/ directory:"
+          ls -l target/
+          
+          # Define the executable source name based on matrix.ext
           EXECUTABLE_SOURCE_NAME="$PROJECT_NAME${{ matrix.ext }}"
-          EXECUTABLE_PATH="target/$EXECUTABLE_SOURCE_NAME"
+          
+          # Check if the executable exists in target/
+          # If not, try target/mticky-version (common for Spring Boot/Quarkus native builds)
+          # Or, if your artifactId is different, adjust PROJECT_NAME accordingly
+          if [[ -f "target/$EXECUTABLE_SOURCE_NAME" ]]; then
+              EXECUTABLE_PATH="target/$EXECUTABLE_SOURCE_NAME"
+          elif [[ -f "target/$PROJECT_NAME-${VERSION#v}" ]]; then # Handle case like 'mticky-1.0.0' for Linux
+              EXECUTABLE_PATH="target/$PROJECT_NAME-${VERSION#v}"
+          elif [[ -f "target/$PROJECT_NAME-${VERSION#v}${{ matrix.ext }}" ]]; then # Handle case like 'mticky-1.0.0.exe' for Windows
+              EXECUTABLE_PATH="target/$PROJECT_NAME-${VERSION#v}${{ matrix.ext }}"
+          else
+              echo "::error::Native executable not found in target/ as '$EXECUTABLE_SOURCE_NAME' or '$PROJECT_NAME-${VERSION#v}${{ matrix.ext }}' or '$PROJECT_NAME-${VERSION#v}'."
+              exit 1
+          fi
+
+          echo "Found executable at: $EXECUTABLE_PATH"
+
           OUTPUT_ARCHIVE_NAME="${PROJECT_NAME}-${VERSION}-${{ matrix.target_os }}-${{ matrix.target_arch }}.${{ matrix.archive_format }}"
           
           mkdir -p native-release-artifacts
           cp "$EXECUTABLE_PATH" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
-
+          
           if [[ "${{ matrix.archive_format }}" == "zip" ]]; then
             zip -j "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME" # '-j' flattens directory structure in zip
           else
