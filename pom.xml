@@ -1,25 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    
+
     <groupId>com.lyubomirbozhinov</groupId>
     <artifactId>mticky</artifactId>
-    <version>0.2.15</version>
+    <version>0.2.16</version>
     <packaging>jar</packaging>
-    
+
     <name>mticky</name>
     <description>A simple Java stock monitor for terminal dwellers</description>
-    <url>https://github.com.lyubomir-bozhinov/mticky</url>
-    
+    <url>https://github.com/lyubomir-bozhinov/mticky</url>
+
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        
-        <!-- Dependency versions -->
+
         <lanterna.version>3.1.2</lanterna.version>
         <jackson.version>2.16.0</jackson.version>
         <slf4j.version>2.0.9</slf4j.version>
@@ -28,17 +27,15 @@
         <mockito.version>5.8.0</mockito.version>
         <wiremock.version>3.0.1</wiremock.version>
         <checkstyle.version>10.12.5</checkstyle.version>
-    </properties>
-    
+        <native-build-tools.version>0.9.28</native-build-tools.version> </properties>
+
     <dependencies>
-        <!-- TUI Framework -->
         <dependency>
             <groupId>com.googlecode.lanterna</groupId>
             <artifactId>lanterna</artifactId>
             <version>${lanterna.version}</version>
         </dependency>
-        
-        <!-- JSON Processing -->
+
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -49,8 +46,7 @@
             <artifactId>jackson-datatype-jsr310</artifactId>
             <version>${jackson.version}</version>
         </dependency>
-        
-        <!-- Logging -->
+
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -61,8 +57,7 @@
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
         </dependency>
-        
-        <!-- Testing -->
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -82,17 +77,16 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-          <groupId>org.wiremock</groupId>
-          <artifactId>wiremock</artifactId>
-          <version>${wiremock.version}</version>
-          <scope>test</scope>
-        </dependency>    
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
 
     </dependencies>
-    
+
     <build>
         <plugins>
-            <!-- Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -102,15 +96,13 @@
                     <target>17</target>
                 </configuration>
             </plugin>
-            
-            <!-- Surefire Plugin for Tests -->
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.2</version>
             </plugin>
-            
-            <!-- Assembly Plugin for Fat JAR -->
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
@@ -137,8 +129,7 @@
                     </execution>
                 </executions>
             </plugin>
-            
-            <!-- Checkstyle Plugin -->
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
@@ -158,19 +149,17 @@
                     </execution>
                 </executions>
             </plugin>
-            
-            <!-- JaCoCo Plugin for Code Coverage -->
+
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.11</version>
-<executions>
+                <executions>
                     <execution>
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
                         <configuration>
-                            <!-- Exclude JDK internal classes that cause "Unsupported class file major version" -->
                             <excludes>
                                 <exclude>jdk.internal.*</exclude>
                             </excludes>
@@ -187,5 +176,37 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${native-build-tools.version}</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <mainClass>com.lyubomirbozhinov.mticky.app.MtickyApplication</mainClass>
+                            <fallback>false</fallback> <buildArgs>
+                                <arg>--no-fallback</arg>
+                                <arg>-H:+UseServiceLoaderFeature</arg>
+                                </buildArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
 
