@@ -52,39 +52,80 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GraalVM manually
-        shell: bash
-        run: |
-          INSTALL_DIR="$HOME/graalvm" # Use home directory to avoid permission issues
-          
-          curl -L -f -o graalvm.tar.gz "${{ matrix.graalvm_jdk_url }}" || { echo "::error::Failed to download GraalVM from URL"; exit 1; }
-          mkdir -p "$INSTALL_DIR" || { echo "::error::Failed to create installation directory"; exit 1; }
-          tar -xvzf graalvm.tar.gz -C "$INSTALL_DIR" --strip-components=1 || { echo "::error::Failed to extract GraalVM archive"; exit 1; }
-          rm graalvm.tar.gz # Clean up downloaded archive
+      # Add Maven caching to the build_native job
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
 
-          # Set environment variables for the current shell session
+      - name: Install GraalVM manually
+        shell: bash # Use bash for consistent shell syntax across OSes
+        run: |
+          # Use $HOME for Unix-like or $USERPROFILE for Windows compatibility
+          INSTALL_DIR="${HOME:-$USERPROFILE}/graalvm" 
+          # Determine the correct archive name and extension based on the OS matrix
+          GRAALVM_ARCHIVE_NAME="graalvm.${{ matrix.archive_format }}" 
+          RUNNER_OS="${{ runner.os }}" # GitHub Actions built-in variable for runner OS
+
+          echo "Downloading GraalVM from ${{ matrix.graalvm_jdk_url }}"
+          curl -L -f -o "$GRAALVM_ARCHIVE_NAME" "${{ matrix.graalvm_jdk_url }}" || { echo "::error::Failed to download GraalVM archive"; exit 1; }
+          
+          echo "Creating installation directory: $INSTALL_DIR"
+          mkdir -p "$INSTALL_DIR" || { echo "::error::Failed to create installation directory"; exit 1; }
+
+          echo "Extracting GraalVM to: $INSTALL_DIR"
+          if [[ "$GRAALVM_ARCHIVE_NAME" == *.zip ]]; then # Check based on actual archive name
+            # For ZIP files (Windows), use unzip and handle the common top-level directory
+            TEMP_EXTRACT_DIR="$INSTALL_DIR/temp_graalvm_extract"
+            mkdir -p "$TEMP_EXTRACT_DIR"
+            unzip -q "$GRAALVM_ARCHIVE_NAME" -d "$TEMP_EXTRACT_DIR" || { echo "::error::Failed to extract GraalVM ZIP archive"; exit 1; }
+            
+            # Find the actual top-level directory extracted by unzip (e.g., graalvm-ce-java17-windows-amd64-22.3.0/)
+            EXTRACTED_TOP_DIR=$(find "$TEMP_EXTRACT_DIR" -maxdepth 1 -mindepth 1 -type d -print -quit)
+            if [[ -z "$EXTRACTED_TOP_DIR" ]]; then
+                echo "::error::Could not find top-level directory in extracted ZIP archive."
+                exit 1
+            fi
+            mv "$EXTRACTED_TOP_DIR"/* "$INSTALL_DIR"/ || { echo "::error::Failed to move extracted GraalVM contents"; exit 1; }
+            rm -rf "$TEMP_EXTRACT_DIR" # Clean up temporary extraction directory
+          else
+            # For TAR.GZ files (Linux/macOS), use tar with --strip-components
+            tar -xvzf "$GRAALVM_ARCHIVE_NAME" -C "$INSTALL_DIR" --strip-components=1 || { echo "::error::Failed to extract GraalVM TAR.GZ archive"; exit 1; }
+          fi
+          
+          rm "$GRAALVM_ARCHIVE_NAME" # Clean up downloaded archive file
+
+          # Add executable permissions for GraalVM binaries on Windows
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "Setting executable permissions for GraalVM binaries on Windows..."
+            chmod +x "$INSTALL_DIR/bin/"*.cmd || true # For .cmd scripts
+            chmod +x "$INSTALL_DIR/bin/"*.exe || true # For .exe executables
+          fi
+
+          # Set JAVA_HOME and PATH for the current shell session
           export JAVA_HOME="$INSTALL_DIR"
           export PATH="$INSTALL_DIR/bin:$PATH" # Prepend to PATH to ensure GraalVM is found first
           
-          # Set for subsequent steps in the job
+          # Persist JAVA_HOME and PATH for subsequent steps in the job
           echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
           echo "PATH=$PATH" >> $GITHUB_ENV
 
           java -version # Verify Java installation is GraalVM
           
           # Check and install native-image component using GraalVM Updater (gu)
-          # First, check if 'gu' itself is available, then attempt to install native-image.
           if command -v gu &> /dev/null; then
               echo "gu command found. Checking for and installing native-image component if necessary..."
               if gu install native-image; then
                   echo "Native-image installation succeeded (or was already present)."
               else
-                  echo "::warning::Failed to install native-image via 'gu'. This might indicate a problem."
+                  echo "::warning::Failed to install native-image via 'gu'. Proceeding anyway."
               fi
           else
               echo "::warning::'gu' command not found. Cannot automatically install native-image. Assuming it's bundled or will fail later."
           fi
-          
           native-image --version # Verify native-image tool installation
 
       - name: Build native image with Maven
