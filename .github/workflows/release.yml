@@ -59,13 +59,35 @@ jobs:
 
       - name: Install GraalVM manually
         run: |
-          curl -L ${{ matrix.graalvm_jdk_url }} -o graalvm.tar.gz
-          mkdir -p /opt/graalvm
-          tar -xvzf graalvm.tar.gz -C /opt/graalvm --strip-components=1
-          echo "/opt/graalvm/bin" >> $GITHUB_PATH
-          java -version  # Verify GraalVM installation
+          # Define installation directory within the home directory to avoid permission issues
+          INSTALL_DIR="$HOME/graalvm" 
+          
+          echo "Downloading GraalVM from ${{ matrix.graalvm_jdk_url }}"
+          # -L for follow redirects, -f for fail silently on server errors, -o for output file
+          curl -L -f -o graalvm.tar.gz "${{ matrix.graalvm_jdk_url }}" || { echo "::error::Failed to download GraalVM from URL"; exit 1; }
+          
+          echo "Creating installation directory: $INSTALL_DIR"
+          mkdir -p "$INSTALL_DIR" || { echo "::error::Failed to create installation directory"; exit 1; }
+          
+          echo "Extracting GraalVM to: $INSTALL_DIR"
+          # -x extract, -z for gzip (if .gz), -v verbose, -f for file, -C change dir, --strip-components=1 to remove top-level folder
+          tar -xvzf graalvm.tar.gz -C "$INSTALL_DIR" --strip-components=1 || { echo "::error::Failed to extract GraalVM archive"; exit 1; }
+          
+          echo "Removing temporary download file."
+          rm graalvm.tar.gz
+
+          # Set environment variables for the current and subsequent steps
+          echo "Setting JAVA_HOME to $INSTALL_DIR"
+          echo "JAVA_HOME=$INSTALL_DIR" >> $GITHUB_ENV
+          echo "$INSTALL_DIR/bin" >> $GITHUB_PATH
+
+          echo "GraalVM manual setup complete."
+          java -version # Verify Java installation
+          native-image --version # Verify native-image tool installation
 
       - name: Build native image with Maven
+        # '-Pnative' activates the specific profile in your pom.xml for native image creation.
+        # Tests will run by default.
         run: mvn -B clean package -Pnative
 
       - name: Prepare native executable artifact
