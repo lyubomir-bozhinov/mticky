@@ -63,6 +63,8 @@ jobs:
 
       - name: Build native image with Maven
         run: mvn -B clean package -Pnative # '-Pnative' activates native image compilation
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
 
       - name: Prepare native executable artifact
         id: prepare_native_artifact
