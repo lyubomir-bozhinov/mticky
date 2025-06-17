@@ -7,7 +7,7 @@
 
 <groupId>com.lyubomirbozhinov</groupId>
 <artifactId>mticky</artifactId>
-<version>0.2.21</version>
+<version>0.2.23</version>
 <packaging>jar</packaging>
 
 <name>mticky</name>
@@ -198,12 +198,11 @@
                 <executable>java</executable>
                 <workingDirectory>${project.build.directory}</workingDirectory>
                 <arguments>
-                  <argument>-Dlanterna.terminal.headless=true</argument>
                   <argument>-classpath</argument>
                   <classpath/>
                   <argument>com.lyubomirbozhinov.mticky.app.MtickyApplication</argument>
                 </arguments>
-                <timeout>5000</timeout> </configuration>
+                <timeout>10000</timeout> </configuration>
             </execution>
           </executions>
         </plugin>
