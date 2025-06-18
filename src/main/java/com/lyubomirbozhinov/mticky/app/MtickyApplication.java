@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
  */
 public class MtickyApplication {
   private static final Logger logger = LoggerFactory.getLogger(MtickyApplication.class);
-  private static final int DEFAULT_REFRESH_INTERVAL_SECONDS = 5;
+  private static final int DEFAULT_REFRESH_INTERVAL_SECONDS = 15;
   
   private final ScheduledExecutorService executorService;
   private final ConfigManager configManager;

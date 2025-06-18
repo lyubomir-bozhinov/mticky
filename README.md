@@ -20,15 +20,15 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Updated 5 stocks at 2023-10-05 14:30:45                                    │
+│ Updated 5 stocks at 2025-05-04 14:30:45                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Symbol │ Price     │ Δ$      │ Δ%      │ Last Updated        │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ AAPL   │ 150.75    │ +2.25   │ +1.52%  │ 2023-10-05 14:30:45 │
-│ GOOGL  │ 2,501.50  │ -15.75  │ -0.62%  │ 2023-10-05 14:30:44 │
-│ MSFT   │ 331.25    │ +5.50   │ +1.69%  │ 2023-10-05 14:30:43 │
-│ AMZN   │ 127.85    │ -2.15   │ -1.65%  │ 2023-10-05 14:30:42 │
-│ TSLA   │ 248.50    │ +12.75  │ +5.41%  │ 2023-10-05 14:30:41 │
+│ AAPL   │ 150.75    │ +2.25   │ +1.52%  │ 2025-05-04 14:30:45 │
+│ GOOGL  │ 2,501.50  │ -15.75  │ -0.62%  │ 2025-05-04 14:30:45 │
+│ MSFT   │ 331.25    │ +5.50   │ +1.69%  │ 2025-05-04 14:30:45 │
+│ AMZN   │ 127.85    │ -2.15   │ -1.65%  │ 2025-05-04 14:30:45 │
+│ TSLA   │ 248.50    │ +12.75  │ +5.41%  │ 2025-05-04 14:30:45 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ [A]dd [D]elete [Q]uit                                                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -79,18 +79,18 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
 java -jar mticky.jar [OPTIONS]
 
 Options:
-  --refresh=N     Set refresh interval in seconds (default: 5)
+  --refresh=N     Set refresh interval in seconds (default: 15)
   --help, -h      Show help message
 ```
 
 ### Examples
 
 ```bash
-# Run with default 5-second refresh
+# Run with default 15-second refresh
 java -jar mticky.jar
 
-# Run with 10-second refresh interval
-java -jar mticky.jar --refresh=10
+# Run with 5-second refresh interval
+java -jar mticky.jar --refresh=5
 
 # Show help
 java -jar mticky.jar --help
@@ -198,7 +198,7 @@ Free tier includes:
 
 **"Rate limit exceeded"**
 - The free Finnhub tier allows 60 calls/minute
-- Reduce refresh frequency with `--refresh=10` or higher
+- Reduce refresh frequency with `--refresh=20` or higher
 - Consider upgrading your Finnhub plan for higher limits
 
 **"No data for symbol XXX"**
