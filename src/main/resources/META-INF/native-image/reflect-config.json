@@ -1,0 +1,43 @@
+[
+  {
+    "name": "com.googlecode.lanterna.gui2.BasicWindow",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.DefaultWindowManager",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.EmptySpace",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.Label",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.MultiWindowTextGUI",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.Panel",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.WindowShadowRenderer",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.dialogs.TextInputDialog",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.dialogs.MessageDialog",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.googlecode.lanterna.gui2.table.Table",
+    "allDeclaredConstructors": true
+  }
+]
+
