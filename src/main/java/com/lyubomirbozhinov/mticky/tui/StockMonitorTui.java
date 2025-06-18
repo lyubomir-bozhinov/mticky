@@ -130,16 +130,22 @@ public class StockMonitorTui {
         logger.debug("Initializing terminal...");
         
         boolean isCI = "true".equalsIgnoreCase(System.getenv("CI"));
+        
         if (isCI) {
           System.out.println("MTICKY: Detected CI environment, enabling headless mode.");
-          System.setProperty("lanterna.terminal.headless", "true");
-        }
+          
+          terminal = new DummyTerminal();
+        
+          screen = new TerminalScreen(terminal);
+          
+          screen.startScreen();
+          screen.stopScreen(); // Clean up even in CI
 
-        DefaultTerminalFactory terminalFactory = new DefaultTerminalFactory();
-
-        if (isCI) {
-          terminal = terminalFactory.createHeadlessTerminal();
+          // Exit after setup
+          System.out.println("MTICKY: Exiting after minimal startup for reflection config.");
+          System.exit(0);
         } else {
+          DefaultTerminalFactory terminalFactory = new DefaultTerminalFactory();
           terminal = terminalFactory.createTerminal();
         }
 

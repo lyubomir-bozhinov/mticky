@@ -7,7 +7,7 @@
 
 <groupId>com.lyubomirbozhinov</groupId>
 <artifactId>mticky</artifactId>
-<version>0.2.23</version>
+<version>0.2.24</version>
 <packaging>jar</packaging>
 
 <name>mticky</name>
@@ -202,7 +202,7 @@
                   <classpath/>
                   <argument>com.lyubomirbozhinov.mticky.app.MtickyApplication</argument>
                 </arguments>
-                <timeout>10000</timeout> </configuration>
+              </configuration>
             </execution>
           </executions>
         </plugin>
