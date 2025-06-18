@@ -3,38 +3,123 @@ name: Release Binaries & JAR
 on:
   push:
     tags:
-      - 'v[0-9]+\.[0-9]+\.[0-9]+' # Trigger on version tags like v1.0.0
+      - 'v[0-9]+\.[0-9]+\.[0-9]+'
 
 jobs:
+  generate_reflection_config:
+    name: Generate Reflection Config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Setup Java for Jar command
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download project dependencies to local Maven repo
+        run: mvn dependency:go-offline
+
+      - name: Verify Java setup
+        run: java -version
+
+      - name: Check Lanterna JAR existence and content
+        run: |
+          LANTERNA_JAR_PATH="$HOME/.m2/repository/com/googlecode/lanterna/lanterna/3.1.2/lanterna-3.1.2.jar"
+          echo "--- Checking Lanterna JAR existence ---"
+          ls -l "$LANTERNA_JAR_PATH" || { echo "::error::Lanterna JAR NOT FOUND at $LANTERNA_JAR_PATH. Cannot proceed."; exit 1; }
+          echo "Lanterna JAR found."
+
+          echo "--- Testing 'jar tf' output for .class files ---"
+          JAR_TF_RAW_OUTPUT=$(jar tf "$LANTERNA_JAR_PATH" 2>&1)
+          echo "$JAR_TF_RAW_OUTPUT" > jar_tf_raw_output.txt
+          echo "Raw 'jar tf' output:"
+          cat jar_tf_raw_output.txt
+
+          if ! echo "$JAR_TF_RAW_OUTPUT" | grep -q '\.class$'; then
+              echo "::error::No .class files found in Lanterna JAR listing from 'jar tf'."
+              echo "This means the JAR might be empty, corrupted, or 'jar tf' is not working as expected."
+              exit 1
+          fi
+          echo "--- 'jar tf' output successfully contains .class files. Proceeding to config generation. ---"
+
+      - name: Generate Lanterna reflection config
+        run: |
+          LANTERNA_JAR_PATH="$HOME/.m2/repository/com/googlecode/lanterna/lanterna/3.1.2/lanterna-3.1.2.jar"
+          CONFIG_DIR="generated-native-config/META-INF/native-image"
+          CONFIG_FILE="$CONFIG_DIR/reflect-config.json"
+
+          mkdir -p "$CONFIG_DIR"
+
+          jar tf "$LANTERNA_JAR_PATH" \
+            | grep '\.class$' \
+            | sed 's/\.class$//' \
+            | sed 's/\//./g' \
+            | awk '{ print "{\n  \"name\": \"" $1 "\",\n  \"allDeclaredConstructors\": true,\n  \"allDeclaredMethods\": true,\n  \"allDeclaredFields\": true\n}," }' \
+            | sed '$s/,//' \
+            | awk 'BEGIN {print "["} {print} END {print "]"}' > "$CONFIG_FILE"
+
+          echo "Generated reflection config at: $CONFIG_FILE"
+          cat "$CONFIG_FILE"
+          echo "Listing contents of CONFIG_DIR after generation:"
+          ls -R "$CONFIG_DIR"
+
+          if [ ! -s "$CONFIG_FILE" ]; then
+            echo "::error::Generated reflect-config.json is empty or not created!"
+            exit 1
+          fi
+
+      - name: Validate JSON Output
+        run: |
+          CONFIG_FILE="generated-native-config/META-INF/native-image/reflect-config.json"
+          echo "Validating JSON file: $CONFIG_FILE"
+          if ! command -v jq &> /dev/null; then
+              echo "jq not found, installing..."
+              sudo apt-get update && sudo apt-get install -y jq
+          fi
+          jq empty "$CONFIG_FILE" || { echo "::error::Invalid JSON in $CONFIG_FILE"; exit 1; }
+
+      - name: Upload reflection config artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanterna-reflect-config
+          path: generated-native-config/
+
   build_native:
     name: Build Native Executable (${{ matrix.target_os }}-${{ matrix.target_arch }})
     runs-on: ${{ matrix.runs-on }}
+    needs: [generate_reflection_config]
     strategy:
-      fail-fast: false # Allows other platform builds to continue even if one fails.
+      fail-fast: false
       matrix:
         include:
-          # Linux AMD64 build configuration
           - runs-on: ubuntu-latest
             target_os: linux
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
 
-          # Windows AMD64 build configuration
           - runs-on: windows-latest
             target_os: windows
             target_arch: amd64
             ext: ".exe"
             archive_format: zip
 
-          # macOS AMD64 (Intel) build configuration
           - runs-on: macos-latest
             target_os: darwin
             target_arch: amd64
             ext: ""
             archive_format: tar.gz
 
-          # macOS ARM64 (Apple Silicon) build configuration
           - runs-on: macos-latest
             target_os: darwin
             target_arch: arm64
@@ -44,7 +129,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cache Maven dependencies for faster builds
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -53,16 +137,39 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # Use the official GraalVM setup action to install GraalVM and native-image
       - name: Setup GraalVM JDK
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17' 
+          java-version: '17'
           distribution: 'graalvm'
           native-image: true
 
+      - name: Download reflection config artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lanterna-reflect-config
+          path: .
+
+      - name: List downloaded artifact contents
+        run: |
+          echo "Listing contents of the current directory after artifact download:"
+          ls -R .
+          echo "--- End of artifact contents listing ---"
+
+      - name: Move reflection config to correct location
+        shell: bash
+        run: |
+          REQUIRED_CONFIG_DIR="src/main/resources/META-INF/native-image"
+          DOWNLOADED_CONFIG_PATH="META-INF/native-image/reflect-config.json"
+
+          mkdir -p "$REQUIRED_CONFIG_DIR"
+          mv "$DOWNLOADED_CONFIG_PATH" "$REQUIRED_CONFIG_DIR/reflect-config.json"
+
+          echo "Moved reflect-config.json to $REQUIRED_CONFIG_DIR/"
+          ls -l "$REQUIRED_CONFIG_DIR/"
+
       - name: Build native image with Maven
-        run: mvn -B clean package -Pnative # '-Pnative' activates native image compilation
+        run: mvn -B clean package -Pnative
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
 
@@ -72,22 +179,17 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           PROJECT_NAME="mticky"
-          
-          # Debug: List contents of target/ to find the exact executable name
+
           echo "Listing contents of target/ directory:"
           ls -l target/
-          
-          # Define the executable source name based on matrix.ext
+
           EXECUTABLE_SOURCE_NAME="$PROJECT_NAME${{ matrix.ext }}"
-          
-          # Check if the executable exists in target/
-          # If not, try target/mticky-version (common for Spring Boot/Quarkus native builds)
-          # Or, if your artifactId is different, adjust PROJECT_NAME accordingly
+
           if [[ -f "target/$EXECUTABLE_SOURCE_NAME" ]]; then
               EXECUTABLE_PATH="target/$EXECUTABLE_SOURCE_NAME"
-          elif [[ -f "target/$PROJECT_NAME-${VERSION#v}" ]]; then # Handle case like 'mticky-1.0.0' for Linux
+          elif [[ -f "target/$PROJECT_NAME-${VERSION#v}" ]]; then
               EXECUTABLE_PATH="target/$PROJECT_NAME-${VERSION#v}"
-          elif [[ -f "target/$PROJECT_NAME-${VERSION#v}${{ matrix.ext }}" ]]; then # Handle case like 'mticky-1.0.0.exe' for Windows
+          elif [[ -f "target/$PROJECT_NAME-${VERSION#v}${{ matrix.ext }}" ]]; then
               EXECUTABLE_PATH="target/$PROJECT_NAME-${VERSION#v}${{ matrix.ext }}"
           else
               echo "::error::Native executable not found in target/ as '$EXECUTABLE_SOURCE_NAME' or '$PROJECT_NAME-${VERSION#v}${{ matrix.ext }}' or '$PROJECT_NAME-${VERSION#v}'."
@@ -97,17 +199,16 @@ jobs:
           echo "Found executable at: $EXECUTABLE_PATH"
 
           OUTPUT_ARCHIVE_NAME="${PROJECT_NAME}-${VERSION}-${{ matrix.target_os }}-${{ matrix.target_arch }}.${{ matrix.archive_format }}"
-          
+
           mkdir -p native-release-artifacts
           cp "$EXECUTABLE_PATH" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
-          
-          # Use 7z on Windows for zipping as 'zip' command is often not found
+
           if [[ "${{ matrix.archive_format }}" == "zip" ]]; then
             7z a -tzip "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" "native-release-artifacts/$EXECUTABLE_SOURCE_NAME"
           else
             tar -czf "native-release-artifacts/$OUTPUT_ARCHIVE_NAME" -C native-release-artifacts "$EXECUTABLE_SOURCE_NAME"
           fi
-          
+
           echo "ARCHIVE_PATH=native-release-artifacts/$OUTPUT_ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
           echo "ARTIFACT_NAME=${PROJECT_NAME}-${{ matrix.target_os }}-${{ matrix.target_arch }}-native-executable" >> "$GITHUB_OUTPUT"
 
@@ -126,22 +227,22 @@ jobs:
       - name: Setup Java 17 (Temurin)
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin' # Temurin provides a standard OpenJDK for JARs
+          distribution: 'temurin'
           java-version: '17'
           cache: 'maven'
 
       - name: Build with Maven
-        run: mvn -B clean package # Builds the standard JAR
+        run: mvn -B clean package
 
       - name: Create JAR distribution archives
         id: create_jar_archives
         run: |
           cd target
           VERSION="${GITHUB_REF_NAME}"
-          VERSION_NO_V="${VERSION#v}" # Remove 'v' prefix from version
+          VERSION_NO_V="${VERSION#v}"
           ARCHIVE_NAME_PREFIX="mticky-${{ github.ref_name }}"
           JAR_NAME="mticky-${VERSION_NO_V}.jar"
-          
+
           mkdir -p ../jar-release-artifacts
           zip -j "../jar-release-artifacts/${ARCHIVE_NAME_PREFIX}.zip" "$JAR_NAME"
           tar -czf "../jar-release-artifacts/${ARCHIVE_NAME_PREFIX}.tar.gz" -C . "$JAR_NAME"
@@ -158,17 +259,17 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build_native, build_jar] # Ensures native and JAR builds complete first
+    needs: [build_native, build_jar]
     permissions:
-      contents: write # Required to create a release
+      contents: write
 
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          path: all-binaries # Downloads all artifacts into subdirectories
+          path: all-binaries
 
-      - name: List downloaded files (for debugging purposes)
+      - name: List downloaded files
         run: ls -R all-binaries
 
       - id: create_release
