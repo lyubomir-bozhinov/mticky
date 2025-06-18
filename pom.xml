@@ -7,7 +7,7 @@
 
 <groupId>com.lyubomirbozhinov</groupId>
 <artifactId>mticky</artifactId>
-<version>0.2.24</version>
+<version>0.2.27</version>
 <packaging>jar</packaging>
 
 <name>mticky</name>
