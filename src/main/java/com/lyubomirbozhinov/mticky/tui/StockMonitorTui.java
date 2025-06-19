@@ -29,6 +29,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -36,11 +39,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
-/**
- * Text User Interface for the stock monitor application.
- * Provides real-time stock data display and user interaction.
- */
 public class StockMonitorTui {
   private static final Logger logger = LoggerFactory.getLogger(StockMonitorTui.class);
 
@@ -49,6 +49,11 @@ public class StockMonitorTui {
   private final int refreshInterval;
   private final FinnhubClient finnhubClient;
   private final StockService stockService;
+
+  // Define padding amounts
+  private static final int LEFT_PAD_SPACES = 1;
+  private static final int RIGHT_PAD_SPACES = 1;
+  private static final int TOTAL_HORIZONTAL_PADDING = LEFT_PAD_SPACES + RIGHT_PAD_SPACES;
 
   private Terminal terminal;
   private Screen screen;
@@ -60,14 +65,8 @@ public class StockMonitorTui {
 
   private final Map<String, StockQuote> stockData = new ConcurrentHashMap<>();
   private volatile String currentStatus = "Starting...";
+  private String selectedSymbol;
 
-  /**
-     * Creates a new StockMonitorTui instance.
-     *
-     * @param configManager the configuration manager
-     * @param executorService the executor service for background tasks
-     * @param refreshInterval the refresh interval in seconds
-     */
   public StockMonitorTui(ConfigManager configManager, ScheduledExecutorService executorService,
     int refreshInterval) {
     this.configManager = Objects.requireNonNull(configManager, "ConfigManager cannot be null");
@@ -80,9 +79,6 @@ public class StockMonitorTui {
     this.stockService = new StockService();
   }
 
-  /**
-     * Starts the TUI application.
-     */
   public void start() throws IOException {
     logger.info("Starting TUI...");
 
@@ -101,9 +97,6 @@ public class StockMonitorTui {
     textGUI.addWindowAndWait(mainWindow);
   }
 
-  /**
-     * Stops the TUI application.
-     */
   public void stop() throws IOException {
     logger.info("Stopping TUI...");
 
@@ -160,17 +153,31 @@ public class StockMonitorTui {
 
     Panel statusPanel = new Panel();
     statusPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
-    statusLabel = new Label(currentStatus);
+    statusLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + currentStatus);
     statusPanel.addComponent(statusLabel);
     statusPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
 
     mainPanel.addComponent(statusPanel, BorderLayout.Location.TOP);
 
-    stockTable = new Table<>("Symbol", "Price", "Δ$", "Δ%", "Last Updated");
+    // Headers are formatted once here with padding. They will not dynamically resize.
+    String headerSymbol = "Symbol";
+    String headerPrice = "Price";
+    String headerChange = "Δ$";
+    String headerPercentChange = "Δ%";
+    String headerLastUpdated = "Last Updated";
+
+    stockTable = new Table<>(
+      formatTableCell(headerSymbol, headerSymbol.length()),
+      formatTableCell(headerPrice, headerPrice.length()),
+      formatTableCell(headerChange, headerChange.length()),
+      formatTableCell(headerPercentChange, headerPercentChange.length()),
+      formatTableCell(headerLastUpdated, headerLastUpdated.length())
+    );
     stockTable.setSelectAction(this::handleTableSelection);
+
     mainPanel.addComponent(stockTable, BorderLayout.Location.CENTER);
 
-    commandLabel = new Label("[A]dd [D]elete [Q]uit");
+    commandLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + "[A]dd [D]elete [Q]uit");
     mainPanel.addComponent(commandLabel, BorderLayout.Location.BOTTOM);
 
     mainWindow.setComponent(mainPanel);
@@ -237,29 +244,71 @@ public class StockMonitorTui {
 
   private void updateTableDisplay() {
     textGUI.getGUIThread().invokeLater(() -> {
+      String symbolToReSelect = null;
+      int currentSelectedRow = stockTable.getSelectedRow();
+      if (currentSelectedRow != -1 && currentSelectedRow < stockTable.getTableModel().getRowCount()) {
+        symbolToReSelect = stockTable.getTableModel().getRow(currentSelectedRow).get(0).trim();
+      }
+
+      // Initialize content widths with header lengths to ensure data columns are at least header-width
+      int symbolColContentWidth = "Symbol".length();
+      int priceColContentWidth = "Price".length();
+      int changeColContentWidth = "Δ$".length();
+      int percentChangeColContentWidth = "Δ%".length();
+      int lastUpdatedColContentWidth = "Last Updated".length();
+
+      // Find maximum content length for each column across all data
+      for (StockQuote quote : stockData.values()) {
+        symbolColContentWidth = Math.max(symbolColContentWidth, quote.getSymbol().length());
+        priceColContentWidth = Math.max(priceColContentWidth, stockService.formatPrice(quote.getCurrentPrice()).length());
+        changeColContentWidth = Math.max(changeColContentWidth, stockService.formatChange(quote.getChange()).length());
+        percentChangeColContentWidth = Math.max(percentChangeColContentWidth, stockService.formatPercentChange(quote.getPercentChange()).length());
+        lastUpdatedColContentWidth = Math.max(lastUpdatedColContentWidth, stockService.formatTimestamp(quote.getLastUpdated()).length());
+      }
+
       stockTable.getTableModel().clear();
 
-      stockData.entrySet().stream()
-        .sorted(Map.Entry.comparingByKey())
-        .forEach(entry -> {
-          StockQuote quote = entry.getValue();
-          String[] row = {
-            quote.getSymbol(),
-            stockService.formatPrice(quote.getCurrentPrice()),
-            stockService.formatChange(quote.getChange()),
-            stockService.formatPercentChange(quote.getPercentChange()),
-            stockService.formatTimestamp(quote.getLastUpdated())
-          };
-          stockTable.getTableModel().addRow(row);
-        });
+      int newSelectionIndex = -1;
+      int currentRowIndex = 0;
 
-      if (stockData.isEmpty()) {
-        updateStatus("Ready - Press 'a' to add stocks to watchlist");
-      } else {
+      // Populate table with dynamically padded data using helper method
+      for (Map.Entry<String, StockQuote> entry : stockData.entrySet().stream()
+      .sorted(Map.Entry.comparingByKey())
+      .toList()) {
+        StockQuote quote = entry.getValue();
+
+        String[] row = {
+          formatTableCell(quote.getSymbol(), symbolColContentWidth),
+          formatTableCell(stockService.formatPrice(quote.getCurrentPrice()), priceColContentWidth),
+          formatTableCell(stockService.formatChange(quote.getChange()), changeColContentWidth),
+          formatTableCell(stockService.formatPercentChange(quote.getPercentChange()), percentChangeColContentWidth),
+          formatTableCell(stockService.formatTimestamp(quote.getLastUpdated()), lastUpdatedColContentWidth)
+        };
+        stockTable.getTableModel().addRow(row);
+
+        if (symbolToReSelect != null && symbolToReSelect.equals(quote.getSymbol())) {
+          newSelectionIndex = currentRowIndex;
+        }
+        currentRowIndex++;
+      }
+
+      if (newSelectionIndex != -1) {
+        stockTable.setSelectedRow(newSelectionIndex);
         updateStatus(String.format("Updated %d stocks at %s",
           stockData.size(),
           stockService.formatTimestamp(LocalDateTime.now())));
+        return;
       }
+
+      if (stockData.isEmpty()) {
+        updateStatus("Ready - Press 'a' to add stocks to watchlist");
+        return;
+      }
+
+      stockTable.setSelectedRow(0);
+      updateStatus(String.format("Updated %d stocks at %s",
+        stockData.size(),
+        stockService.formatTimestamp(LocalDateTime.now())));
     });
   }
 
@@ -267,7 +316,7 @@ public class StockMonitorTui {
     currentStatus = status;
     textGUI.getGUIThread().invokeLater(() -> {
       if (statusLabel != null) {
-        statusLabel.setText(currentStatus);
+        statusLabel.setText(" ".repeat(LEFT_PAD_SPACES) + currentStatus);
       }
     });
   }
@@ -373,7 +422,22 @@ public class StockMonitorTui {
   }
 
   private void handleTableSelection() {
-    // Future extension: show detailed stock information or other actions
+    // TO-DO: Decide what to do with ENTER on selected item
+  }
+
+  /**
+     * Formats a table cell value to include left and right padding,
+     * and ensures it's left-aligned within the calculated total width.
+     *
+     * @param value The original string content for the cell.
+     * @param maxContentWidth The maximum length of content (excluding padding) found
+     * for this column across all rows (including header).
+     * @return The formatted string for display in the table cell.
+     */
+  private String formatTableCell(String value, int maxContentWidth) {
+    String paddedValue = " ".repeat(LEFT_PAD_SPACES) + value;
+    int targetWidth = maxContentWidth + TOTAL_HORIZONTAL_PADDING;
+    return String.format("%-" + targetWidth + "s", paddedValue);
   }
 }
 
