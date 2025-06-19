@@ -4,33 +4,40 @@ import com.lyubomirbozhinov.mticky.api.FinnhubClient;
 import com.lyubomirbozhinov.mticky.config.ConfigManager;
 import com.lyubomirbozhinov.mticky.stock.StockQuote;
 import com.lyubomirbozhinov.mticky.stock.StockService;
+
 import com.googlecode.lanterna.TerminalPosition;
 import com.googlecode.lanterna.TerminalSize;
+import com.googlecode.lanterna.TextColor;
+import com.googlecode.lanterna.graphics.Theme;
 import com.googlecode.lanterna.gui2.BasicWindow;
 import com.googlecode.lanterna.gui2.BorderLayout;
+import com.googlecode.lanterna.gui2.Borders;
 import com.googlecode.lanterna.gui2.DefaultWindowManager;
 import com.googlecode.lanterna.gui2.EmptySpace;
 import com.googlecode.lanterna.gui2.Label;
+import com.googlecode.lanterna.gui2.LinearLayout;
+import com.googlecode.lanterna.gui2.Direction;
 import com.googlecode.lanterna.gui2.MultiWindowTextGUI;
 import com.googlecode.lanterna.gui2.Panel;
 import com.googlecode.lanterna.gui2.Window;
 import com.googlecode.lanterna.gui2.WindowListener;
 import com.googlecode.lanterna.gui2.table.Table;
-import com.googlecode.lanterna.gui2.dialogs.TextInputDialog;
-import com.googlecode.lanterna.gui2.dialogs.MessageDialog;
+import com.googlecode.lanterna.gui2.table.TableModel;
+import com.googlecode.lanterna.gui2.dialogs.ListSelectDialog;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
 import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import com.googlecode.lanterna.terminal.Terminal;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,9 +46,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class StockMonitorTui {
+
   private static final Logger logger = LoggerFactory.getLogger(StockMonitorTui.class);
 
   private final ConfigManager configManager;
@@ -49,8 +58,8 @@ public class StockMonitorTui {
   private final int refreshInterval;
   private final FinnhubClient finnhubClient;
   private final StockService stockService;
+  private final ThemeLoader themeLoader;
 
-  // Define padding amounts
   private static final int LEFT_PAD_SPACES = 1;
   private static final int RIGHT_PAD_SPACES = 1;
   private static final int TOTAL_HORIZONTAL_PADDING = LEFT_PAD_SPACES + RIGHT_PAD_SPACES;
@@ -62,10 +71,17 @@ public class StockMonitorTui {
   private Table<String> stockTable;
   private Label statusLabel;
   private Label commandLabel;
+  private Panel headerPanel;
 
   private final Map<String, StockQuote> stockData = new ConcurrentHashMap<>();
   private volatile String currentStatus = "Starting...";
   private String selectedSymbol;
+
+  private StockTableHeaderRenderer stockTableHeaderRenderer;
+  private StockTableCellRenderer stockTableCellRenderer;
+
+  // Store column labels separately as Table does not expose getColumnLabels()
+  private String[] columnLabels;
 
   public StockMonitorTui(ConfigManager configManager, ScheduledExecutorService executorService,
     int refreshInterval) {
@@ -77,6 +93,20 @@ public class StockMonitorTui {
     this.refreshInterval = refreshInterval;
     this.finnhubClient = new FinnhubClient(System.getenv("FINNHUB_API_KEY"));
     this.stockService = new StockService();
+    this.themeLoader = new ThemeLoader();
+
+    // Define column labels once
+    this.columnLabels = new String[]{
+      "Symbol",
+      "Price",
+      "Δ$",
+      "Δ%",
+      "Last Updated"
+    };
+
+    // Initialize the renderers here
+    this.stockTableHeaderRenderer = new StockTableHeaderRenderer(themeLoader, LEFT_PAD_SPACES);
+    this.stockTableCellRenderer = new StockTableCellRenderer(themeLoader, LEFT_PAD_SPACES);
   }
 
   public void start() throws IOException {
@@ -87,18 +117,25 @@ public class StockMonitorTui {
     }
 
     initializeTerminal();
+
+    loadThemeProperties();
+
     initializeUiComponents();
 
     refreshAllStocks();
-    updateTableDisplay();
 
     startDataRefreshScheduler();
 
     textGUI.addWindowAndWait(mainWindow);
+
+    // After mainWindow is closed, perform final cleanup.
+    stop();
   }
 
   public void stop() throws IOException {
     logger.info("Stopping TUI...");
+
+    executorService.shutdownNow();
 
     if (screen != null) {
       try {
@@ -115,8 +152,6 @@ public class StockMonitorTui {
         logger.warn("Failed to close terminal cleanly", e);
       }
     }
-
-    executorService.shutdownNow();
   }
 
   private boolean handleCIEnvironment() throws IOException {
@@ -140,57 +175,57 @@ public class StockMonitorTui {
     terminal = new DefaultTerminalFactory().createTerminal();
     screen = new TerminalScreen(terminal);
     screen.startScreen();
+
     textGUI = new MultiWindowTextGUI(screen, new DefaultWindowManager(), new EmptySpace());
   }
 
-  private void initializeUiComponents() {
-    mainWindow = new BasicWindow("mticky - Stock Monitor");
-    mainWindow.setHints(java.util.Arrays.asList(Window.Hint.FULL_SCREEN));
+  private void loadThemeProperties() {
+    String themeName = configManager.getTheme();
+    themeLoader.loadTheme(themeName, configManager.getThemesDirectory());
+    logger.info("Loaded theme properties for: {}", themeName);
+    // Do not call applyColorsToComponents here directly, it's called after UI components are initialized
+  }
 
+  private void initializeUiComponents() {
+    mainWindow = new BasicWindow("mticky - A simple Java stock monitor for terminal dwellers");
+    mainWindow.setHints(Arrays.asList(Window.Hint.FULL_SCREEN));
     mainWindow.addWindowListener(createMainWindowListener());
 
     Panel mainPanel = new Panel(new BorderLayout());
+    this.headerPanel = new Panel(new LinearLayout(Direction.VERTICAL)); // ASSIGN TO FIELD HERE
 
-    Panel statusPanel = new Panel();
-    statusPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+    headerPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
     statusLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + currentStatus);
-    statusPanel.addComponent(statusLabel);
-    statusPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+    headerPanel.addComponent(statusLabel.withBorder(Borders.singleLine()));
+    headerPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+    mainPanel.addComponent(headerPanel, BorderLayout.Location.TOP); // ADD headerPanel to mainPanel
 
-    mainPanel.addComponent(statusPanel, BorderLayout.Location.TOP);
-
-    // Headers are formatted once here with padding. They will not dynamically resize.
-    String headerSymbol = "Symbol";
-    String headerPrice = "Price";
-    String headerChange = "Δ$";
-    String headerPercentChange = "Δ%";
-    String headerLastUpdated = "Last Updated";
-
-    stockTable = new Table<>(
-      formatTableCell(headerSymbol, headerSymbol.length()),
-      formatTableCell(headerPrice, headerPrice.length()),
-      formatTableCell(headerChange, headerChange.length()),
-      formatTableCell(headerPercentChange, headerPercentChange.length()),
-      formatTableCell(headerLastUpdated, headerLastUpdated.length())
-    );
+    stockTable = new Table<>(columnLabels);
+    stockTable.setTableHeaderRenderer(stockTableHeaderRenderer);
+    stockTable.setTableCellRenderer(stockTableCellRenderer);
     stockTable.setSelectAction(this::handleTableSelection);
 
     mainPanel.addComponent(stockTable, BorderLayout.Location.CENTER);
 
-    commandLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + "[A]dd [D]elete [Q]uit");
-    mainPanel.addComponent(commandLabel, BorderLayout.Location.BOTTOM);
+    commandLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + "[A]dd [D]elete [T]heme [Q]uit");
+    mainPanel.addComponent(commandLabel.withBorder(Borders.singleLine()), BorderLayout.Location.BOTTOM);
 
     mainWindow.setComponent(mainPanel);
-    textGUI.addWindow(mainWindow);
+
+    // Call applyColorsToComponents here initially
+    applyColorsToComponents();
   }
 
   private WindowListener createMainWindowListener() {
     return new WindowListener() {
       @Override
-      public void onResized(Window window, TerminalSize oldSize, TerminalSize newSize) {}
+      public void onResized(Window window, TerminalSize oldSize, TerminalSize newSize) {
+
+      }
 
       @Override
-      public void onMoved(Window window, TerminalPosition oldPosition, TerminalPosition newPosition) {}
+      public void onMoved(Window window, TerminalPosition oldPosition, TerminalPosition newPosition) {
+      }
 
       @Override
       public void onInput(Window window, KeyStroke keyStroke, AtomicBoolean deliverEvent) {
@@ -225,39 +260,57 @@ public class StockMonitorTui {
 
     updateStatus("Refreshing " + watchlist.size() + " stocks...");
 
+    List<String> failedSymbols = new ArrayList<>();
+
     for (String symbol : watchlist) {
       finnhubClient.getStockQuote(symbol)
         .thenAccept(optionalQuote -> {
-          optionalQuote.ifPresent(quote -> stockData.put(symbol, quote));
-          updateTableDisplay();
-          if (optionalQuote.isEmpty()) {
+          if (optionalQuote.isPresent()) {
+            stockData.put(symbol, optionalQuote.get());
+          } else {
             logger.warn("No quote available for symbol: {}", symbol);
+            synchronized (failedSymbols) {
+              failedSymbols.add(symbol);
+            }
           }
+          textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
         })
         .exceptionally(throwable -> {
           logger.error("Failed to fetch quote for {}", symbol, throwable);
-          updateStatus("Error fetching " + symbol + ": " + throwable.getMessage());
+          synchronized (failedSymbols) {
+            failedSymbols.add(symbol);
+          }
           return null;
         });
     }
+
+    // Delay status update to avoid polluting the UI with each failure
+    executorService.schedule(() -> {
+      if (!failedSymbols.isEmpty()) {
+        updateStatus("Updated with errors: " + String.join(", ", failedSymbols));
+      }
+    }, refreshInterval / 2, TimeUnit.SECONDS); // Delay enough for most tasks to complete
   }
+
 
   private void updateTableDisplay() {
     textGUI.getGUIThread().invokeLater(() -> {
       String symbolToReSelect = null;
       int currentSelectedRow = stockTable.getSelectedRow();
       if (currentSelectedRow != -1 && currentSelectedRow < stockTable.getTableModel().getRowCount()) {
-        symbolToReSelect = stockTable.getTableModel().getRow(currentSelectedRow).get(0).trim();
+        if (stockTable.getTableModel().getRowCount() > 0) {
+          if (currentSelectedRow < stockTable.getTableModel().getRowCount()) {
+            symbolToReSelect = stockTable.getTableModel().getRow(currentSelectedRow).get(0).trim();
+          }
+        }
       }
 
-      // Initialize content widths with header lengths to ensure data columns are at least header-width
       int symbolColContentWidth = "Symbol".length();
       int priceColContentWidth = "Price".length();
       int changeColContentWidth = "Δ$".length();
       int percentChangeColContentWidth = "Δ%".length();
       int lastUpdatedColContentWidth = "Last Updated".length();
 
-      // Find maximum content length for each column across all data
       for (StockQuote quote : stockData.values()) {
         symbolColContentWidth = Math.max(symbolColContentWidth, quote.getSymbol().length());
         priceColContentWidth = Math.max(priceColContentWidth, stockService.formatPrice(quote.getCurrentPrice()).length());
@@ -271,7 +324,6 @@ public class StockMonitorTui {
       int newSelectionIndex = -1;
       int currentRowIndex = 0;
 
-      // Populate table with dynamically padded data using helper method
       for (Map.Entry<String, StockQuote> entry : stockData.entrySet().stream()
       .sorted(Map.Entry.comparingByKey())
       .toList()) {
@@ -305,7 +357,10 @@ public class StockMonitorTui {
         return;
       }
 
-      stockTable.setSelectedRow(0);
+      if (stockTable.getTableModel().getRowCount() > 0) {
+        stockTable.setSelectedRow(0);
+      }
+
       updateStatus(String.format("Updated %d stocks at %s",
         stockData.size(),
         stockService.formatTimestamp(LocalDateTime.now())));
@@ -317,11 +372,18 @@ public class StockMonitorTui {
     textGUI.getGUIThread().invokeLater(() -> {
       if (statusLabel != null) {
         statusLabel.setText(" ".repeat(LEFT_PAD_SPACES) + currentStatus);
+        try {
+          screen.refresh(); // <-- Apply try-catch here
+        } catch (IOException e) {
+          logger.error("Error refreshing screen after status update: {}", e.getMessage(), e);
+        }
       }
     });
   }
 
   private void handleKeyPress(KeyStroke keyStroke) {
+    if (keyStroke == null) return;
+
     if (keyStroke.getKeyType() == KeyType.Character) {
       handleCharacterKey(Character.toLowerCase(keyStroke.getCharacter()));
       return;
@@ -342,6 +404,9 @@ public class StockMonitorTui {
       case 'd':
       handleDeleteStock();
       break;
+      case 't':
+      handleChangeTheme();
+      break;
       case 'q':
       performShutdown("'q' key pressed");
       break;
@@ -352,58 +417,94 @@ public class StockMonitorTui {
 
   private void performShutdown(String reason) {
     logger.info("Initiating shutdown: {}", reason);
-    try {
-      stop();
-    } catch (IOException e) {
-      logger.error("Error during shutdown initiated by {}: {}", reason, e.getMessage());
-    } finally {
-      System.exit(0);
-    }
+    new ThemedMessageDialog("Confirm Exit", "Are you sure you want to exit?", themeLoader, () -> {
+      // This callback runs if user clicks OK on the confirmation dialog
+      // Explicitly close the main window. This will cause addWindowAndWait() in start() to return.
+      if (mainWindow != null) {
+        mainWindow.close(); // NEW: Programmatically close the main window
+      }
+      // The rest of the cleanup (executor, screen, terminal) happens in the stop() method
+      // which is now called right after addWindowAndWait() returns in the start() method.
+    }).showDialog(textGUI);
   }
 
   private void handleAddStock() {
-    String symbol = TextInputDialog.showDialog(textGUI, "Add Stock", "Enter stock symbol:", "");
-    if (symbol == null || symbol.trim().isEmpty()) {
-      return;
-    }
+    ThemedTextInputDialog addDialog = new ThemedTextInputDialog(
+      "Add Stock",
+      "Enter stock symbol:",
+      "",
+      themeLoader,
+      new ThemedTextInputDialog.TextInputDialogCallback() {
+        @Override
+        public void onInput(String symbol) {
+          if (symbol == null || symbol.trim().isEmpty()) {
+            showInfoMessage("Warning", "Stock symbol cannot be empty.");
+            return;
+          }
 
-    String normalizedSymbol = stockService.normalizeStockSymbol(symbol);
+          String normalizedSymbol = stockService.normalizeStockSymbol(symbol);
 
-    if (!stockService.isValidStockSymbol(normalizedSymbol)) {
-      showErrorDialog("Invalid Symbol", "The symbol '" + symbol + "' is not valid.");
-      return;
-    }
+          if (configManager.isInWatchlist(normalizedSymbol)) {
+            showErrorDialog("Already Added", normalizedSymbol + " is already being monitored.");
+            return;
+          }
 
-    if (!configManager.addToWatchlist(normalizedSymbol)) {
-      updateStatus(normalizedSymbol + " is already in watchlist");
-      return;
-    }
+          if (!configManager.addToWatchlist(normalizedSymbol)) {
+            updateStatus("Failed to add " + normalizedSymbol + " to watchlist (internal error).");
+            return;
+          }
 
-    updateStatus("Added " + normalizedSymbol + " to watchlist");
-    configManager.save();
+          updateStatus("Adding " + normalizedSymbol + " to watchlist...");
+          configManager.save();
 
-    finnhubClient.getStockQuote(normalizedSymbol)
-      .thenAccept(optionalQuote -> {
-        optionalQuote.ifPresent(quote -> stockData.put(normalizedSymbol, quote));
-        textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
-        if (optionalQuote.isEmpty()) {
-          showErrorDialog("No Data", "No stock data available for: " + normalizedSymbol);
+          finnhubClient.getStockQuote(normalizedSymbol)
+            .thenAccept(optionalQuote -> {
+              if (optionalQuote.isPresent()) {
+                StockQuote quote = optionalQuote.get();
+                stockData.put(normalizedSymbol, quote);
+                textGUI.getGUIThread().invokeLater(StockMonitorTui.this::updateTableDisplay);
+                showInfoMessage("Success", "Stock '" + normalizedSymbol + "' added and data fetched.");
+              } else {
+                showErrorDialog("No Data", "Stock '" + normalizedSymbol + "' added, but no real-time data available.");
+                textGUI.getGUIThread().invokeLater(StockMonitorTui.this::updateTableDisplay);
+              }
+            })
+            .exceptionally(ex -> {
+              logger.error("Failed to fetch stock data for {}", normalizedSymbol, ex);
+              configManager.removeFromWatchlist(normalizedSymbol);
+              configManager.save();
+              stockData.remove(normalizedSymbol);
+              textGUI.getGUIThread().invokeLater(StockMonitorTui.this::updateTableDisplay);
+              showErrorDialog("Error", "Failed to fetch data for " + normalizedSymbol + ": " + ex.getMessage() + "\nStock removed from watchlist.");
+              return null;
+            });
         }
-      })
-      .exceptionally(ex -> {
-        logger.error("Failed to fetch stock data for {}", normalizedSymbol, ex);
-        showErrorDialog("Error", "Error fetching stock data: " + ex.getMessage());
-        return null;
-      });
+
+        @Override
+        public void onCancel() {
+          updateStatus("Add stock operation cancelled.");
+        }
+      }
+    );
+    addDialog.showDialog(textGUI);
   }
 
+
   private void handleDeleteStock() {
-    String symbol = TextInputDialog.showDialog(textGUI, "Delete Stock", "Enter stock symbol to remove:", "");
-    if (symbol == null || symbol.trim().isEmpty()) {
+    if (configManager.getWatchlist().isEmpty()) {
+      new ThemedMessageDialog("Delete Stock", "Watchlist is empty. Nothing to delete.", themeLoader, null).showDialog(textGUI);
       return;
     }
 
-    String normalizedSymbol = symbol.trim().toUpperCase();
+    List<String> stocks = List.copyOf(configManager.getWatchlist());
+    String toRemove = ListSelectDialog.showDialog(textGUI, "Delete Stock", "Select stock to delete:", stocks.toArray(new String[0]));
+
+    if (toRemove == null) {
+      updateStatus("Delete stock operation cancelled.");
+      return;
+    }
+
+    String normalizedSymbol = toRemove.trim().toUpperCase();
 
     if (!configManager.removeFromWatchlist(normalizedSymbol)) {
       showErrorDialog("Not Found", normalizedSymbol + " is not in the watchlist.");
@@ -417,27 +518,183 @@ public class StockMonitorTui {
   }
 
   private void showErrorDialog(String title, String message) {
-    textGUI.getGUIThread().invokeLater(() ->
-      MessageDialog.showMessageDialog(textGUI, title, message));
+    textGUI.getGUIThread().invokeLater(() -> {
+      new ThemedMessageDialog(title, message, themeLoader, null).showDialog(textGUI);
+    });
+  }
+
+  private void showInfoMessage(String title, String message) {
+    showInfoMessage(title, message, null);
+  }
+
+  private void showInfoMessage(String title, String message, Runnable onClosed) {
+    textGUI.getGUIThread().invokeLater(() -> {
+      ThemedMessageDialog messageDialog = new ThemedMessageDialog(
+        title,
+        message,
+        themeLoader,
+        onClosed
+      );
+      messageDialog.showDialog(textGUI);
+    });
   }
 
   private void handleTableSelection() {
-    // TO-DO: Decide what to do with ENTER on selected item
+    int selectedRow = stockTable.getSelectedRow();
+    if (selectedRow != -1) {
+      String symbol = stockTable.getTableModel().getRow(selectedRow).get(0).trim();
+      updateStatus("Selected: " + symbol);
+    }
   }
 
-  /**
-     * Formats a table cell value to include left and right padding,
-     * and ensures it's left-aligned within the calculated total width.
-     *
-     * @param value The original string content for the cell.
-     * @param maxContentWidth The maximum length of content (excluding padding) found
-     * for this column across all rows (including header).
-     * @return The formatted string for display in the table cell.
-     */
+  private void handleChangeTheme() {
+    String currentTheme = configManager.getTheme();
+    List<String> availableThemesList = themeLoader.getAvailableThemes(configManager.getThemesDirectory());
+    String[] availableThemesArray = availableThemesList.toArray(new String[0]);
+
+    int preselectedIndex = availableThemesList.indexOf(currentTheme);
+    if (preselectedIndex == -1) {
+      preselectedIndex = availableThemesList.indexOf("default");
+      if (preselectedIndex == -1 && availableThemesArray.length > 0) {
+        preselectedIndex = 0;
+      } else if (availableThemesArray.length == 0) {
+        showErrorDialog("Themes", "No themes available.");
+        return;
+      }
+    }
+
+    String selectedThemeName = ListSelectDialog.<String>showDialog(textGUI, "Select Theme", "Choose a theme:", preselectedIndex, availableThemesArray);
+
+    if (selectedThemeName != null && !selectedThemeName.trim().isEmpty()) {
+      String trimmedNewTheme = selectedThemeName.trim();
+      if (!trimmedNewTheme.equalsIgnoreCase(currentTheme)) {
+        updateStatus("Applying theme: " + trimmedNewTheme + "...");
+        configManager.setTheme(trimmedNewTheme);
+        configManager.save();
+        loadThemeProperties(); // This now loads properties into themeLoader
+
+        textGUI.getGUIThread().invokeLater(() -> {
+          // Apply theme to the GUI components
+          applyColorsToComponents(); // This now applies the PropertyTheme and custom colors
+
+          // Re-initialize renderers to ensure they pick up the new themeLoader's colors
+          stockTableHeaderRenderer = new StockTableHeaderRenderer(themeLoader, LEFT_PAD_SPACES);
+          stockTableCellRenderer = new StockTableCellRenderer(themeLoader, LEFT_PAD_SPACES);
+
+          // Set the custom change colors for the cell renderer
+          if (stockTableCellRenderer != null) {
+            stockTableCellRenderer.setPositiveChangeColor(themeLoader.getPositiveChangeColor());
+            stockTableCellRenderer.setNegativeChangeColor(themeLoader.getNegativeChangeColor());
+          }
+
+          List<List<String>> currentTableRows = new ArrayList<>();
+          for (int r = 0; r < stockTable.getTableModel().getRowCount(); r++) {
+            currentTableRows.add(new ArrayList<>(stockTable.getTableModel().getRow(r)));
+          }
+          int currentSelectedRow = stockTable.getSelectedRow();
+
+          Table<String> newStockTable = new Table<>(columnLabels);
+
+          newStockTable.setTableHeaderRenderer(stockTableHeaderRenderer);
+          newStockTable.setTableCellRenderer(stockTableCellRenderer);
+          newStockTable.setSelectAction(this::handleTableSelection);
+
+          for (List<String> row : currentTableRows) {
+            newStockTable.getTableModel().addRow(row.toArray(new String[0]));
+          }
+          newStockTable.setSelectedRow(currentSelectedRow);
+
+          Panel mainPanel = (Panel) mainWindow.getComponent();
+          mainPanel.getChildren().stream()
+            .filter(c -> c instanceof Table)
+            .findFirst()
+            .ifPresent(mainPanel::removeComponent);
+
+          mainPanel.addComponent(newStockTable, BorderLayout.Location.CENTER);
+
+          stockTable = newStockTable;
+
+          mainWindow.setComponent(mainPanel);
+
+          stockTable.invalidate();
+          try {
+            screen.doResizeIfNecessary();
+            // Clear the screen with the new main background color
+            screen.newTextGraphics().setBackgroundColor(themeLoader.getMainBackgroundColor());
+            screen.clear();
+            screen.refresh(); // <-- Apply try-catch here
+          } catch (IOException e) {
+            logger.error("Failed to refresh screen after theme change", e);
+          }
+          updateStatus("Theme applied: " + trimmedNewTheme);
+        });
+      } else {
+        updateStatus("Theme is already set to: " + trimmedNewTheme);
+      }
+    } else {
+      updateStatus("Theme change cancelled or invalid input.");
+    }
+  }
+
   private String formatTableCell(String value, int maxContentWidth) {
     String paddedValue = " ".repeat(LEFT_PAD_SPACES) + value;
-    int targetWidth = maxContentWidth + TOTAL_HORIZONTAL_PADDING;
+    int effectiveContentWidth = Math.max(value.length(), maxContentWidth);
+    int targetWidth = effectiveContentWidth + TOTAL_HORIZONTAL_PADDING;
     return String.format("%-" + targetWidth + "s", paddedValue);
   }
-}
 
+  private void applyColorsToComponents() {
+    if (mainWindow == null) {
+      return;
+    }
+
+    // Apply PropertyTheme to the GUI
+    try {
+      Theme guiTheme = themeLoader.createGuiTheme();
+      textGUI.setTheme(guiTheme);
+      logger.info("Applied GUI theme to TextGUI via PropertyTheme.");
+    } catch (Exception e) {
+      logger.error("Error creating or applying PropertyTheme to GUI: {}", e.getMessage(), e);
+    }
+
+    // Manually apply specific colors if they are not part of PropertyTheme's standard keys.
+    // This is especially for your custom 'positive_change_fg' and 'negative_change_fg'.
+    // Ensure your renderers have access to these.
+    if (stockTableCellRenderer != null) {
+      stockTableCellRenderer.setPositiveChangeColor(themeLoader.getPositiveChangeColor());
+      stockTableCellRenderer.setNegativeChangeColor(themeLoader.getNegativeChangeColor());
+    }
+
+    TextColor mainBg = themeLoader.getMainBackgroundColor();
+    TextColor mainFg = themeLoader.getMainForegroundColor();
+    TextColor highlightFg = themeLoader.getHighlightForegroundColor();
+
+    Panel mainPanel = (Panel) mainWindow.getComponent();
+    if (mainPanel != null) {
+      mainPanel.setFillColorOverride(mainBg);
+    }
+
+    if (headerPanel != null) {
+      headerPanel.setFillColorOverride(mainBg);
+      headerPanel.getChildren().stream()
+        .filter(c -> c instanceof Label)
+        .map(c -> (Label) c)
+        .forEach(label -> {
+          // The title label no longer exists directly, it's implicitly handled by theme or removed.
+          // Assuming this was for general labels, apply mainFg.
+          label.setForegroundColor(mainFg);
+          label.setBackgroundColor(mainBg);
+        });
+    }
+
+    if (statusLabel != null) {
+      statusLabel.setForegroundColor(mainFg);
+      statusLabel.setBackgroundColor(mainBg);
+    }
+    if (commandLabel != null) {
+      commandLabel.setForegroundColor(highlightFg);
+      commandLabel.setBackgroundColor(mainBg);
+    }
+    // No screen.clear() or screen.refresh() here, as this is handled by handleChangeTheme and initializeTerminal.
+  }
+}
