@@ -15,24 +15,14 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
 - **Production Ready**: Comprehensive logging, testing, and configuration management
 - **Thread Safe**: Concurrent operations with proper synchronization
 - **Configurable**: Customizable refresh intervals and settings
+- **Customizable Themes**: Switch between built-in color themes or define your own
 
 ## Visuals
+### tokyo-night (default)
+![tokyo-night theme (default)](docs/screenshots/tokyo-night-2025-06-21-01.png)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Updated 5 stocks at 2025-05-04 14:30:45                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Symbol │ Price     │ Δ$      │ Δ%      │ Last Updated        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ AAPL   │ 150.75    │ +2.25   │ +1.52%  │ 2025-05-04 14:30:45 │
-│ GOOGL  │ 2,501.50  │ -15.75  │ -0.62%  │ 2025-05-04 14:30:45 │
-│ MSFT   │ 331.25    │ +5.50   │ +1.69%  │ 2025-05-04 14:30:45 │
-│ AMZN   │ 127.85    │ -2.15   │ -1.65%  │ 2025-05-04 14:30:45 │
-│ TSLA   │ 248.50    │ +12.75  │ +5.41%  │ 2025-05-04 14:30:45 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ [A]dd [D]elete [Q]uit                                                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### everforest
+![everforest theme](docs/screenshots/everforest-2025-06-21-01.png)
 
 ## Quick Start
 
@@ -70,7 +60,8 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
 ### Controls
 
 - **`a`** - Add a new stock symbol to your watchlist
-- **`d`** - Delete a stock symbol from your watchlist  
+- **`d`** - Delete a stock symbol from your Watchlist
+- **`t`** - Change application theme  
 - **`q`** or **`Ctrl+C`** - Quit the application
 
 ### Command Line Options
@@ -110,6 +101,56 @@ The application stores its configuration in `~/.mticky/`:
 
 - `config.properties` - Watchlist and application settings
 - `logs/app.log` - Application logs with daily rotation
+- `themes` - Application themes (bundled and custom user .theme files) 
+
+## Themes
+
+Customize the TUI appearance using built-in or custom themes.
+
+### Built-in Themes
+
+- `tokyo-night` (default)
+- `catppuccin`
+- `everforest`
+- `rose-pine`
+
+### Custom Themes
+Place your `.theme` files in `~/.mticky/themes/`.
+
+Example `.theme` file format (tokyo-night colours):
+
+```bash
+# Main bg
+theme[main_bg]=#1a1b26
+
+# Main text color
+theme[main_fg]=#cfc9c2
+
+# Title color for boxes
+theme[title]=#cfc9c2
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]=#7dcfff
+
+# Background color of selected item in processes box
+theme[selected_bg]=#414868
+
+# Foreground color of selected item in processes box
+theme[selected_fg]=#cfc9c2
+
+# Color of inactive/disabled text
+theme[inactive_fg]=#565f89
+
+# Box divider line and small boxes line color
+theme[div_line]=#565f89
+
+# Stocks price change up
+theme[positive_change_fg]=#9ece6a
+
+# Stocks price change down
+theme[negative_change_fg]=#f7768e
+
+```
 
 ## Development
 

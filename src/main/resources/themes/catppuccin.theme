@@ -1,0 +1,29 @@
+# Main background
+theme[main_bg]=#24273a
+
+# Main text color
+theme[main_fg]=#c6d0f5
+
+# Title color for boxes
+theme[title]=#c6d0f5
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]=#8caaee
+
+# Background color of selected item in processes box
+theme[selected_bg]=#51576d
+
+# Foreground color of selected item in processes box
+theme[selected_fg]=#8caaee
+
+# Color of inactive/disabled text
+theme[inactive_fg]=#838ba7
+
+# Box divider line and small boxes line color
+theme[div_line]=#737994
+
+# Stocks price change up
+theme[positive_change_fg]=#81c8be
+
+# Stocks price change down
+theme[negative_change_fg]=#babbf1

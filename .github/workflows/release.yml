@@ -34,7 +34,7 @@ jobs:
 
       - name: Check Lanterna JAR existence and content
         run: |
-          LANTERNA_JAR_PATH="$HOME/.m2/repository/com/googlecode/lanterna/lanterna/3.1.2/lanterna-3.1.2.jar"
+          LANTERNA_JAR_PATH="$HOME/.m2/repository/com/googlecode/lanterna/lanterna/3.1.3/lanterna-3.1.3.jar"
           echo "--- Checking Lanterna JAR existence ---"
           ls -l "$LANTERNA_JAR_PATH" || { echo "::error::Lanterna JAR NOT FOUND at $LANTERNA_JAR_PATH. Cannot proceed."; exit 1; }
           echo "Lanterna JAR found."
@@ -54,7 +54,7 @@ jobs:
 
       - name: Generate Lanterna reflection config
         run: |
-          LANTERNA_JAR_PATH="$HOME/.m2/repository/com/googlecode/lanterna/lanterna/3.1.2/lanterna-3.1.2.jar"
+          LANTERNA_JAR_PATH="$HOME/.m2/repository/com/googlecode/lanterna/lanterna/3.1.3/lanterna-3.1.3.jar"
           CONFIG_DIR="generated-native-config/META-INF/native-image"
           CONFIG_FILE="$CONFIG_DIR/reflect-config.json"
 
