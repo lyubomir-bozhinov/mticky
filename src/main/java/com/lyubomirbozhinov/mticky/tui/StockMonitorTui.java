@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.function.Consumer;
 
 public class StockMonitorTui {
 
@@ -497,24 +498,32 @@ public class StockMonitorTui {
     }
 
     List<String> stocks = List.copyOf(configManager.getWatchlist());
-    String toRemove = ListSelectDialog.showDialog(textGUI, "Delete Stock", "Select stock to delete:", stocks.toArray(new String[0]));
 
-    if (toRemove == null) {
-      updateStatus("Delete stock operation cancelled.");
-      return;
-    }
+    new ThemedListSelectDialog("Delete Stock", "Select stock to delete:", stocks, themeLoader, createDeleteStockAction()).showDialog(textGUI);
+  }
 
-    String normalizedSymbol = toRemove.trim().toUpperCase();
+  private Consumer<String> createDeleteStockAction() {
+    return selectedSymbol -> {
+      if (selectedSymbol == null) {
+        updateStatus("Delete stock operation cancelled.");
+        return;
+      }
 
-    if (!configManager.removeFromWatchlist(normalizedSymbol)) {
-      showErrorDialog("Not Found", normalizedSymbol + " is not in the watchlist.");
-      return;
-    }
+      String normalizedSymbol = selectedSymbol.trim().toUpperCase();
 
-    stockData.remove(normalizedSymbol);
-    configManager.save();
-    updateStatus("Removed " + normalizedSymbol + " from watchlist");
-    textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
+      if (!configManager.removeFromWatchlist(normalizedSymbol)) {
+        showErrorDialog("Not Found", normalizedSymbol + " is not in the watchlist.");
+        return;
+      }
+
+      stockData.remove(normalizedSymbol);
+
+      configManager.save();
+
+      textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
+
+      showInfoMessage("Success", "Stock '" + normalizedSymbol + "' removed from watchlist.");
+    };
   }
 
   private void showErrorDialog(String title, String message) {
