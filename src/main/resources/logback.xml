@@ -6,9 +6,9 @@
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
-        <!-- Only show WARN and ERROR on console to avoid cluttering TUI -->
+        <!-- Only show ERROR on console to avoid cluttering TUI -->
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>WARN</level>
+            <level>ERROR</level>
         </filter>
     </appender>
     

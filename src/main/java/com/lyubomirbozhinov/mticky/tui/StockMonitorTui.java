@@ -285,7 +285,7 @@ public class StockMonitorTui {
           textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
         })
         .exceptionally(throwable -> {
-          logger.error("Failed to fetch quote for {}", symbol, throwable);
+          logger.warn("Failed to fetch quote for {}", symbol, throwable);
           synchronized (failedSymbols) {
             failedSymbols.add(symbol);
           }
@@ -464,17 +464,22 @@ public class StockMonitorTui {
           }
 
           updateStatus("Adding " + normalizedSymbol + " to watchlist...");
-          configManager.save();
+
 
           finnhubClient.getStockQuote(normalizedSymbol)
             .thenAccept(optionalQuote -> {
               if (optionalQuote.isPresent()) {
+                configManager.save();
+
                 StockQuote quote = optionalQuote.get();
                 stockData.put(normalizedSymbol, quote);
                 textGUI.getGUIThread().invokeLater(StockMonitorTui.this::updateTableDisplay);
                 showInfoMessage("Success", "Stock '" + normalizedSymbol + "' added and data fetched.");
               } else {
-                showErrorDialog("No Data", "Stock '" + normalizedSymbol + "' added, but no real-time data available.");
+                showErrorDialog("No Data", "Stock '" + normalizedSymbol + "' not added.");
+                configManager.removeFromWatchlist(normalizedSymbol);
+                configManager.save();
+                stockData.remove(normalizedSymbol);
                 textGUI.getGUIThread().invokeLater(StockMonitorTui.this::updateTableDisplay);
               }
             })
@@ -647,7 +652,7 @@ public class StockMonitorTui {
           screen.clear();
           screen.refresh();
         } catch (IOException e) {
-          logger.error("Failed to refresh screen after theme change", e);
+          logger.warn("Failed to refresh screen after theme change", e);
         }
         updateStatus("Theme applied: " + trimmedNewTheme);
       });
@@ -672,7 +677,7 @@ public class StockMonitorTui {
       textGUI.setTheme(guiTheme);
       logger.info("Applied GUI theme to TextGUI via PropertyTheme.");
     } catch (Exception e) {
-      logger.error("Error creating or applying PropertyTheme to GUI: {}", e.getMessage(), e);
+      logger.warn("Could not create or apply PropertyTheme to GUI: {}", e.getMessage(), e);
     }
 
     // Manually apply specific colors if they are not part of PropertyTheme's standard keys.
