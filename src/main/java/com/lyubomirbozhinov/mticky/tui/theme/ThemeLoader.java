@@ -1,4 +1,4 @@
-package com.lyubomirbozhinov.mticky.tui;
+package com.lyubomirbozhinov.mticky.tui.theme;
 
 import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.graphics.PropertyTheme;

@@ -1,4 +1,6 @@
-package com.lyubomirbozhinov.mticky.tui;
+package com.lyubomirbozhinov.mticky.tui.dialogs;
+
+import com.lyubomirbozhinov.mticky.tui.theme.ThemeLoader;
 
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.gui2.BasicWindow;

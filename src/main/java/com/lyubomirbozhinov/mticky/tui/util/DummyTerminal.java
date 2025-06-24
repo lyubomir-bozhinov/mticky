@@ -1,4 +1,4 @@
-package com.lyubomirbozhinov.mticky.tui;
+package com.lyubomirbozhinov.mticky.tui.util;
 
 import com.googlecode.lanterna.SGR;
 import com.googlecode.lanterna.TerminalPosition;
