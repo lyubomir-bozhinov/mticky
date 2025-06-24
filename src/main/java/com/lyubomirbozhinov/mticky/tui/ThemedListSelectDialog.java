@@ -4,6 +4,7 @@ import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.gui2.BasicWindow;
 import com.googlecode.lanterna.gui2.Button;
 import com.googlecode.lanterna.gui2.Direction;
+import com.googlecode.lanterna.gui2.EmptySpace;
 import com.googlecode.lanterna.gui2.LinearLayout;
 import com.googlecode.lanterna.gui2.MultiWindowTextGUI;
 import com.googlecode.lanterna.gui2.Panel;
@@ -18,6 +19,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 public class ThemedListSelectDialog extends BasicWindow {
+  private static final int LEFT_PAD_SPACES = 2;
 
   private Table<String> selectionTable;
   private Consumer<String> onSelectedCallback;
@@ -26,12 +28,13 @@ public class ThemedListSelectDialog extends BasicWindow {
   public ThemedListSelectDialog(String title, String message, List<String> itemsToDisplay, ThemeLoader themeLoader, Consumer<String> onSelectedCallback) {
     super(title);
     this.onSelectedCallback = onSelectedCallback;
-    setHints(Arrays.asList(Window.Hint.NO_DECORATIONS, Window.Hint.CENTERED));
+    setHints(Arrays.asList(Window.Hint.CENTERED));
 
     Panel panel = new Panel(new LinearLayout(Direction.VERTICAL));
     panel.setFillColorOverride(themeLoader.getMainBackgroundColor());
+    panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
 
-    Label messageLabel = new Label(message);
+    Label messageLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + message);
     messageLabel.setForegroundColor(themeLoader.getMainForegroundColor());
     messageLabel.setBackgroundColor(themeLoader.getMainBackgroundColor());
     panel.addComponent(messageLabel);
@@ -43,7 +46,7 @@ public class ThemedListSelectDialog extends BasicWindow {
       tableModel.addRow(item);
     }
 
-    this.cellRenderer = new StockTableCellRenderer(themeLoader, 0); 
+    this.cellRenderer = new StockTableCellRenderer(themeLoader, LEFT_PAD_SPACES * 2); 
     this.cellRenderer.setPositiveChangeColor(themeLoader.getPositiveChangeColor());
     this.cellRenderer.setNegativeChangeColor(themeLoader.getNegativeChangeColor());
 
@@ -62,8 +65,11 @@ public class ThemedListSelectDialog extends BasicWindow {
       }
     });
 
+    panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+
     Panel buttonPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
     buttonPanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
+    buttonPanel.addComponent(new EmptySpace(new TerminalSize(LEFT_PAD_SPACES, 0)));
 
     Button selectButton = new Button("Select", () -> {
       close();

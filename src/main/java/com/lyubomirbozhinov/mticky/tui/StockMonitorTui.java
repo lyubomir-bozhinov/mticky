@@ -418,7 +418,7 @@ public class StockMonitorTui {
 
   private void performShutdown(String reason) {
     logger.info("Initiating shutdown: {}", reason);
-    new ThemedMessageDialog("Confirm Exit", "Are you sure you want to exit?", themeLoader, () -> {
+    new ThemedMessageDialog("Confirm Exit", "Are you sure you want to exit?", themeLoader, true, () -> {
       // This callback runs if user clicks OK on the confirmation dialog
       // Explicitly close the main window. This will cause addWindowAndWait() in start() to return.
       if (mainWindow != null) {
