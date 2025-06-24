@@ -102,29 +102,55 @@ public class ThemeLoader {
     }
   }
 
+
   private void transformCustomKeysToPropertyThemeKeys() {
     guiThemeProperties.clear();
 
-    for (String key : rawThemeProperties.stringPropertyNames()) {
-      String value = rawThemeProperties.getProperty(key);
-      String transformedKey = key;
+    String mainBgValue = rawThemeProperties.getProperty("theme[main_bg]");
+    String mainFgValue = rawThemeProperties.getProperty("theme[main_fg]");
 
-      if (key.startsWith("theme[") && key.endsWith("]")) {
-        transformedKey = key.substring("theme[".length(), key.length() - 1);
-      }
-
-      switch (transformedKey) {
-        case "main_bg":
-        guiThemeProperties.setProperty("background", value);
-        break;
-        case "main_fg":
-        guiThemeProperties.setProperty("foreground", value);
-        break;
-        // All other keys are handled in dedicated fields only
-        default:
-        break;
-      }
+    if (mainBgValue != null) {
+      guiThemeProperties.setProperty("background", mainBgValue);
     }
+    if (mainFgValue != null) {
+      guiThemeProperties.setProperty("foreground", mainFgValue);
+    }
+
+    String selectedBgValue = rawThemeProperties.getProperty("theme[selected_bg]");
+    String selectedFgValue = rawThemeProperties.getProperty("theme[selected_fg]");
+    String hiFgValue = rawThemeProperties.getProperty("theme[hi_fg]");
+
+    if (mainBgValue != null) {
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.background", mainBgValue);
+    }
+    if (mainFgValue != null) {
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.foreground", mainFgValue);
+    }
+
+    if (selectedBgValue != null) {
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.background[FOCUSED]", selectedBgValue);
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.background[SELECTED]", selectedBgValue);
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.background[ACTIVE]", selectedBgValue);
+    }
+
+    if (selectedFgValue != null) {
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.foreground[FOCUSED]", selectedFgValue);
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.foreground[SELECTED]", selectedFgValue);
+    }
+
+    if (hiFgValue != null) {
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.Button.foreground[ACTIVE]", hiFgValue);
+    }
+
+    String divLineValue = rawThemeProperties.getProperty("theme[div_line]");
+    if (divLineValue != null) {
+      guiThemeProperties.setProperty("com.googlecode.lanterna.gui2.AbstractBorder.foreground[ACTIVE]", divLineValue);
+    }
+
+    // Keep this logging. It shows exactly what is being passed to PropertyTheme.
+    logger.debug("--- Final guiThemeProperties Content ---");
+    guiThemeProperties.forEach((key, value) -> logger.debug("  {}: {}", key, value));
+    logger.debug("--------------------------------------");
   }
 
   public List<String> getAvailableThemes(Path themeDirectory) {

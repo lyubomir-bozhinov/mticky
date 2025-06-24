@@ -1,10 +1,10 @@
-// This is the code you should be using for ThemedTextInputDialog.java
 package com.lyubomirbozhinov.mticky.tui;
 
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.gui2.BasicWindow;
 import com.googlecode.lanterna.gui2.Button;
 import com.googlecode.lanterna.gui2.Direction;
+import com.googlecode.lanterna.gui2.EmptySpace;
 import com.googlecode.lanterna.gui2.Label;
 import com.googlecode.lanterna.gui2.LinearLayout;
 import com.googlecode.lanterna.gui2.MultiWindowTextGUI;
@@ -12,76 +12,81 @@ import com.googlecode.lanterna.gui2.Panel;
 import com.googlecode.lanterna.gui2.TextBox;
 import com.googlecode.lanterna.gui2.Window;
 import com.googlecode.lanterna.TextColor;
-import com.googlecode.lanterna.gui2.Borders; // Import for borders
-import com.googlecode.lanterna.gui2.EmptySpace; // Import for padding
 
 import java.util.Arrays;
 
 public class ThemedTextInputDialog extends BasicWindow {
-    private TextBox textBox;
-    private TextInputDialogCallback callback;
+  private static final int PAD_SPACES = 1;
 
-    public static interface TextInputDialogCallback {
-        void onInput(String result);
-        void onCancel();
-    }
+  private TextBox textBox;
+  private TextInputDialogCallback callback;
 
-    public ThemedTextInputDialog(String title, String message, String initialValue, ThemeLoader themeLoader, TextInputDialogCallback callback) {
-        super(title);
-        this.callback = callback;
-        setHints(Arrays.asList(Window.Hint.CENTERED)); 
+  public static interface TextInputDialogCallback {
+    void onInput(String result);
+    void onCancel();
+  }
 
-        Panel contentPanel = new Panel(new LinearLayout(Direction.VERTICAL));
-        contentPanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
+  public ThemedTextInputDialog(String title, String message, String initialValue, ThemeLoader themeLoader, TextInputDialogCallback callback) {
+    super(title);
+    this.callback = callback;
+    setHints(Arrays.asList(Window.Hint.CENTERED));
 
-        contentPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+    Panel mainContentPanel = new Panel(new LinearLayout(Direction.VERTICAL));
+    mainContentPanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
 
-        Label messageLabel = new Label(message);
-        messageLabel.setForegroundColor(themeLoader.getMainForegroundColor());
-        messageLabel.setBackgroundColor(themeLoader.getMainBackgroundColor());
-        contentPanel.addComponent(messageLabel);
-        
-        contentPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+    mainContentPanel.addComponent(new EmptySpace(new TerminalSize(0, 1)));
 
-        textBox = new TextBox(new TerminalSize(initialValue.length() + 5, 1), initialValue);
-        // TextBox colors will be determined by the overall TextGUI theme.
-        contentPanel.addComponent(textBox);
+    Panel messagePanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
+    messagePanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
+    messagePanel.addComponent(new EmptySpace(new TerminalSize(PAD_SPACES, 0)));
+    Label messageLabel = new Label(message);
+    messageLabel.setForegroundColor(themeLoader.getMainForegroundColor());
+    messageLabel.setBackgroundColor(themeLoader.getMainBackgroundColor());
+    messagePanel.addComponent(messageLabel);
+    messagePanel.addComponent(new EmptySpace(new TerminalSize(PAD_SPACES, 0)));
+    mainContentPanel.addComponent(messagePanel);
 
-        contentPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+    mainContentPanel.addComponent(new EmptySpace(new TerminalSize(0, 1)));
 
-        Panel buttonPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        buttonPanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
+    Panel textBoxPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
+    textBoxPanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
+    textBoxPanel.addComponent(new EmptySpace(new TerminalSize(PAD_SPACES, 0)));
+    textBox = new TextBox(new TerminalSize(initialValue.length() + 6, 1), initialValue);
+    textBoxPanel.addComponent(textBox);
+    mainContentPanel.addComponent(textBoxPanel);
 
-        Button okButton = new Button("OK", () -> {
-            if (this.callback != null) {
-                this.callback.onInput(textBox.getText());
-            }
-            close();
-        });
-        // Button colors are handled by the TextGUI's theme and ButtonRenderer
-        okButton.setTheme(null); // Optional: Prevents default Lanterna theme from overriding *if* you set a custom theme for buttons
-        buttonPanel.addComponent(okButton);
-        
-        buttonPanel.addComponent(new EmptySpace(new TerminalSize(2, 1)));
+    mainContentPanel.addComponent(new EmptySpace(new TerminalSize(0, 1)));
 
-        Button cancelButton = new Button("Cancel", () -> {
-            if (this.callback != null) {
-                this.callback.onCancel();
-            }
-            close();
-        });
-        // Button colors are handled by the TextGUI's theme and ButtonRenderer
-        cancelButton.setTheme(null); // Optional: Prevents default Lanterna theme from overriding *if* you set a custom theme for buttons
-        buttonPanel.addComponent(cancelButton);
-        contentPanel.addComponent(buttonPanel);
-        
-        contentPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+    Panel buttonPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
+    buttonPanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
+    buttonPanel.addComponent(new EmptySpace(new TerminalSize(PAD_SPACES, 0)));
 
-        setComponent(contentPanel); // This line is correct for BasicWindow
-    }
+    Button okButton = new Button("OK", () -> {
+      if (this.callback != null) {
+        this.callback.onInput(textBox.getText());
+      }
+      close();
+    });
+    buttonPanel.addComponent(okButton);
 
-    public void showDialog(MultiWindowTextGUI textGUI) {
-        textGUI.addWindow(this);
-    }
+    //buttonPanel.addComponent(new EmptySpace(new TerminalSize(1, 0)));
+
+    Button cancelButton = new Button("Cancel", () -> {
+      if (this.callback != null) {
+        this.callback.onCancel();
+      }
+      close();
+    });
+    buttonPanel.addComponent(cancelButton);
+    mainContentPanel.addComponent(buttonPanel);
+
+    mainContentPanel.addComponent(new EmptySpace(new TerminalSize(0, 1)));
+
+    setComponent(mainContentPanel);
+  }
+
+  public void showDialog(MultiWindowTextGUI textGUI) {
+    textGUI.addWindow(this);
+  }
 }
 
