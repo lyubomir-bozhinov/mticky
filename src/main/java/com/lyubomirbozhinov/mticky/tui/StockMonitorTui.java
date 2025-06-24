@@ -559,90 +559,91 @@ public class StockMonitorTui {
   private void handleChangeTheme() {
     String currentTheme = configManager.getTheme();
     List<String> availableThemesList = themeLoader.getAvailableThemes(configManager.getThemesDirectory());
-    String[] availableThemesArray = availableThemesList.toArray(new String[0]);
 
-    int preselectedIndex = availableThemesList.indexOf(currentTheme);
-    if (preselectedIndex == -1) {
-      preselectedIndex = availableThemesList.indexOf("default");
-      if (preselectedIndex == -1 && availableThemesArray.length > 0) {
-        preselectedIndex = 0;
-      } else if (availableThemesArray.length == 0) {
-        showErrorDialog("Themes", "No themes available.");
+    if (availableThemesList.isEmpty()) {
+      showErrorDialog("Themes", "No themes available.");
+      return;
+    }
+
+    new ThemedListSelectDialog(
+      "Select Theme",
+      "Choose a theme:",
+      availableThemesList,
+      themeLoader,
+      createChangeThemeAction(currentTheme)
+    ).showDialog(textGUI);
+  }
+
+  private Consumer<String> createChangeThemeAction(String currentTheme) {
+    return selectedThemeName -> {
+      if (selectedThemeName == null || selectedThemeName.trim().isEmpty()) { 
+        updateStatus("Theme change cancelled or invalid input.");
         return;
       }
-    }
 
-    String selectedThemeName = ListSelectDialog.<String>showDialog(textGUI, "Select Theme", "Choose a theme:", preselectedIndex, availableThemesArray);
-
-    if (selectedThemeName != null && !selectedThemeName.trim().isEmpty()) {
       String trimmedNewTheme = selectedThemeName.trim();
-      if (!trimmedNewTheme.equalsIgnoreCase(currentTheme)) {
-        updateStatus("Applying theme: " + trimmedNewTheme + "...");
-        configManager.setTheme(trimmedNewTheme);
-        configManager.save();
-        loadThemeProperties(); // This now loads properties into themeLoader
-
-        textGUI.getGUIThread().invokeLater(() -> {
-          // Apply theme to the GUI components
-          applyColorsToComponents(); // This now applies the PropertyTheme and custom colors
-
-          // Re-initialize renderers to ensure they pick up the new themeLoader's colors
-          stockTableHeaderRenderer = new StockTableHeaderRenderer(themeLoader, LEFT_PAD_SPACES);
-          stockTableCellRenderer = new StockTableCellRenderer(themeLoader, LEFT_PAD_SPACES);
-
-          // Set the custom change colors for the cell renderer
-          if (stockTableCellRenderer != null) {
-            stockTableCellRenderer.setPositiveChangeColor(themeLoader.getPositiveChangeColor());
-            stockTableCellRenderer.setNegativeChangeColor(themeLoader.getNegativeChangeColor());
-          }
-
-          List<List<String>> currentTableRows = new ArrayList<>();
-          for (int r = 0; r < stockTable.getTableModel().getRowCount(); r++) {
-            currentTableRows.add(new ArrayList<>(stockTable.getTableModel().getRow(r)));
-          }
-          int currentSelectedRow = stockTable.getSelectedRow();
-
-          Table<String> newStockTable = new Table<>(columnLabels);
-
-          newStockTable.setTableHeaderRenderer(stockTableHeaderRenderer);
-          newStockTable.setTableCellRenderer(stockTableCellRenderer);
-          newStockTable.setSelectAction(this::handleTableSelection);
-
-          for (List<String> row : currentTableRows) {
-            newStockTable.getTableModel().addRow(row.toArray(new String[0]));
-          }
-          newStockTable.setSelectedRow(currentSelectedRow);
-
-          Panel mainPanel = (Panel) mainWindow.getComponent();
-          mainPanel.getChildren().stream()
-            .filter(c -> c instanceof Table)
-            .findFirst()
-            .ifPresent(mainPanel::removeComponent);
-
-          mainPanel.addComponent(newStockTable, BorderLayout.Location.CENTER);
-
-          stockTable = newStockTable;
-
-          mainWindow.setComponent(mainPanel);
-
-          stockTable.invalidate();
-          try {
-            screen.doResizeIfNecessary();
-            // Clear the screen with the new main background color
-            screen.newTextGraphics().setBackgroundColor(themeLoader.getMainBackgroundColor());
-            screen.clear();
-            screen.refresh(); // <-- Apply try-catch here
-          } catch (IOException e) {
-            logger.error("Failed to refresh screen after theme change", e);
-          }
-          updateStatus("Theme applied: " + trimmedNewTheme);
-        });
-      } else {
+      if (trimmedNewTheme.equalsIgnoreCase(currentTheme)) {
         updateStatus("Theme is already set to: " + trimmedNewTheme);
+        return;
       }
-    } else {
-      updateStatus("Theme change cancelled or invalid input.");
-    }
+
+      updateStatus("Applying theme: " + trimmedNewTheme + "...");
+      configManager.setTheme(trimmedNewTheme);
+      configManager.save();
+      themeLoader.loadTheme(trimmedNewTheme, configManager.getThemesDirectory());
+
+      textGUI.getGUIThread().invokeLater(() -> {
+        applyColorsToComponents();
+
+        stockTableHeaderRenderer = new StockTableHeaderRenderer(themeLoader, LEFT_PAD_SPACES);
+        stockTableCellRenderer = new StockTableCellRenderer(themeLoader, LEFT_PAD_SPACES);
+
+        if (stockTableCellRenderer != null) {
+          stockTableCellRenderer.setPositiveChangeColor(themeLoader.getPositiveChangeColor());
+          stockTableCellRenderer.setNegativeChangeColor(themeLoader.getNegativeChangeColor());
+        }
+
+        List<List<String>> currentTableRows = new ArrayList<>();
+        for (int r = 0; r < stockTable.getTableModel().getRowCount(); r++) {
+          currentTableRows.add(new ArrayList<>(stockTable.getTableModel().getRow(r)));
+        }
+        int currentSelectedRow = stockTable.getSelectedRow();
+
+        Table<String> newStockTable = new Table<>(columnLabels);
+
+        newStockTable.setTableHeaderRenderer(stockTableHeaderRenderer);
+        newStockTable.setTableCellRenderer(stockTableCellRenderer);
+        newStockTable.setSelectAction(this::handleTableSelection);
+
+        for (List<String> row : currentTableRows) {
+          newStockTable.getTableModel().addRow(row.toArray(new String[0]));
+        }
+        newStockTable.setSelectedRow(currentSelectedRow);
+
+        Panel mainPanel = (Panel) mainWindow.getComponent();
+        mainPanel.getChildren().stream()
+          .filter(c -> c instanceof Table)
+          .findFirst()
+          .ifPresent(mainPanel::removeComponent);
+
+        mainPanel.addComponent(newStockTable, BorderLayout.Location.CENTER);
+
+        stockTable = newStockTable;
+
+        mainWindow.setComponent(mainPanel);
+
+        stockTable.invalidate();
+        try {
+          screen.doResizeIfNecessary();
+          screen.newTextGraphics().setBackgroundColor(themeLoader.getMainBackgroundColor());
+          screen.clear();
+          screen.refresh();
+        } catch (IOException e) {
+          logger.error("Failed to refresh screen after theme change", e);
+        }
+        updateStatus("Theme applied: " + trimmedNewTheme);
+      });
+    };
   }
 
   private String formatTableCell(String value, int maxContentWidth) {

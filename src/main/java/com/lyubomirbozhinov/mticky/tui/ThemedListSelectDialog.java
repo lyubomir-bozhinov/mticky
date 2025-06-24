@@ -36,7 +36,7 @@ public class ThemedListSelectDialog extends BasicWindow {
     messageLabel.setBackgroundColor(themeLoader.getMainBackgroundColor());
     panel.addComponent(messageLabel);
 
-    selectionTable = new Table<>("Items");
+    selectionTable = new Table<>(" ");
 
     TableModel<String> tableModel = selectionTable.getTableModel();
     for (String item : itemsToDisplay) {
