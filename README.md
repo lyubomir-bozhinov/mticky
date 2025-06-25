@@ -45,13 +45,14 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
    mvn clean package
    ```
 
-3. **Set up your API key:**
-The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use.
 
-4. **Run the application:**
+
+3. **Run the application:**
    ```bash
    java -jar target/mticky.jar
    ```
+4. **Set up your API key:**
+The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use.
 
 ### Run from Binary (Alternative)
 For a quicker start, you can download the pre-built binaries from the [releases page](https://github.com/lyubomir-bozhinov/mticky/releases).
@@ -73,6 +74,8 @@ For a quicker start, you can download the pre-built binaries from the [releases 
         ```cmd
         .\mticky.exe
         ```
+4. **Set up your API key:**
+The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use.
 
 ## Usage
 
