@@ -45,19 +45,19 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
    mvn clean package
    ```
 
-
-
 3. **Run the application:**
    ```bash
    java -jar target/mticky.jar
    ```
+
 4. **Set up your API key:**
-The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use.
+The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use. The refresh interval is also configured directly within the TUI.
 
 ### Run from Binary (Alternative)
 For a quicker start, you can download the pre-built binaries from the [releases page](https://github.com/lyubomir-bozhinov/mticky/releases).
 
 1.  **Download the appropriate binary** for your operating system and architecture (e.g., `mticky-vX.Y.Z-linux-amd64.tar.gz` for Linux 64-bit, `mticky-vX.Y.Z-windows-amd64.zip` for Windows 64-bit).
+
 2.  **Extract the archive:**
     * **Linux/macOS:**
         ```bash
@@ -65,6 +65,7 @@ For a quicker start, you can download the pre-built binaries from the [releases 
         cd mticky-vX.Y.Z/bin
         ```
     * **Windows:** Extract the `.zip` file. Navigate into the extracted `mticky-vX.Y.Z\bin` directory.
+
 3.  **Run the application:**
     * **Linux/macOS:**
         ```bash
@@ -74,8 +75,9 @@ For a quicker start, you can download the pre-built binaries from the [releases 
         ```cmd
         .\mticky.exe
         ```
+
 4. **Set up your API key:**
-The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use.
+The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use. The refresh interval is also configured directly within the TUI.
 
 ## Usage
 
@@ -83,7 +85,8 @@ The application will prompt you for your Finnhub API key on its first run. Once 
 
 - **`a`** - Add a new stock symbol to your watchlist
 - **`d`** - Delete a stock symbol from your Watchlist
-- **`t`** - Change application theme  
+- **`t`** - Change application theme
+- **`r`** - Change stock refresh interval (default: 15)
 - **`q`** or **`Ctrl+C`** - Quit the application
 
 ### Command Line Options
@@ -92,18 +95,14 @@ The application will prompt you for your Finnhub API key on its first run. Once 
 java -jar mticky.jar [OPTIONS]
 
 Options:
-  --refresh=N     Set refresh interval in seconds (default: 15)
   --help, -h      Show help message
 ```
 
 ### Examples
 
 ```bash
-# Run with default 15-second refresh
+# Run application 
 java -jar mticky.jar
-
-# Run with 5-second refresh interval
-java -jar mticky.jar --refresh=5
 
 # Show help
 java -jar mticky.jar --help
@@ -242,7 +241,7 @@ The application uses the [Finnhub API](https://finnhub.io/docs/api) for real-tim
 
 Free tier includes:
 - 60 API calls/minute
-- Real-time data for US stocks
+- Data for US stocks
 - No credit card required
 
 ## Troubleshooting
@@ -255,7 +254,7 @@ Free tier includes:
 
 **"Rate limit exceeded"**
 - The free Finnhub tier allows 60 calls/minute
-- Reduce refresh frequency with `--refresh=20` or higher
+- Reduce refresh frequency to 20 seconds or higher (press 'R' in the application)
 - Consider upgrading your Finnhub plan for higher limits
 
 **"No data for symbol XXX"**
