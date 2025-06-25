@@ -14,22 +14,19 @@ import org.slf4j.LoggerFactory;
  */
 public class MtickyApplication {
   private static final Logger logger = LoggerFactory.getLogger(MtickyApplication.class);
-  private static final int DEFAULT_REFRESH_INTERVAL_SECONDS = 15;
-  
+
   private final ScheduledExecutorService executorService;
   private final ConfigManager configManager;
   private StockMonitorTui tui;
-  private int refreshInterval;
-  
+
   /**
    * Creates a new MtickyApplication instance.
    */
   public MtickyApplication() {
     this.executorService = Executors.newScheduledThreadPool(2);
     this.configManager = new ConfigManager();
-    this.refreshInterval = DEFAULT_REFRESH_INTERVAL_SECONDS;
   }
-  
+
   /**
    * Main entry point for the application.
    *
@@ -37,7 +34,7 @@ public class MtickyApplication {
    */
   public static void main(String[] args) {
     MtickyApplication app = new MtickyApplication();
-    
+
     try {
       app.parseArguments(args);
       app.initialize();
@@ -48,7 +45,7 @@ public class MtickyApplication {
       System.exit(1);
     }
   }
-  
+
   /**
    * Parses command-line arguments.
    *
@@ -57,17 +54,8 @@ public class MtickyApplication {
   private void parseArguments(String[] args) {
     for (int i = 0; i < args.length; i++) {
       String arg = args[i];
-      
-      if (arg.startsWith("--refresh=")) {
-        try {
-          this.refreshInterval = Integer.parseInt(arg.substring("--refresh=".length()));
-          if (this.refreshInterval < 1) {
-            throw new IllegalArgumentException("Refresh interval must be at least 1 second");
-          }
-        } catch (NumberFormatException e) {
-          throw new IllegalArgumentException("Invalid refresh interval: " + arg);
-        }
-      } else if ("--help".equals(arg) || "-h".equals(arg)) {
+
+      if ("--help".equals(arg) || "-h".equals(arg)) {
         printUsage();
         System.exit(0);
       } else {
@@ -75,23 +63,23 @@ public class MtickyApplication {
       }
     }
   }
-  
+
   /**
    * Initializes the application components.
    */
   private void initialize() {
-    logger.info("Starting mticky stock monitor (refresh interval: {}s)", refreshInterval);
-    
+    logger.info("Starting mticky stock monitor...");
+
     // Initialize configuration
     configManager.initialize();
-    
+
     // Initialize TUI
-    tui = new StockMonitorTui(configManager, executorService, refreshInterval);
-    
+    tui = new StockMonitorTui(configManager, executorService);
+
     // Register shutdown hook
     Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
   }
-  
+
   /**
    * Runs the main application loop.
    */
@@ -103,13 +91,13 @@ public class MtickyApplication {
       throw new RuntimeException("Failed to run TUI", e);
     }
   }
-  
+
   /**
    * Performs graceful shutdown of the application.
    */
   private void shutdown() {
     logger.info("Shutting down mticky...");
-    
+
     if (tui != null) {
       try {
         tui.stop();
@@ -117,7 +105,7 @@ public class MtickyApplication {
         logger.warn("Error stopping TUI", e);
       }
     }
-    
+
     // Shutdown executor service
     executorService.shutdown();
     try {
@@ -128,17 +116,17 @@ public class MtickyApplication {
       executorService.shutdownNow();
       Thread.currentThread().interrupt();
     }
-    
+
     // Save configuration
     try {
       configManager.save();
     } catch (Exception e) {
       logger.warn("Error saving configuration", e);
     }
-    
+
     logger.info("mticky shutdown complete");
   }
-  
+
   /**
    * Prints usage information.
    */
@@ -148,7 +136,6 @@ public class MtickyApplication {
     System.out.println("Usage: java -jar mticky.jar [OPTIONS]");
     System.out.println();
     System.out.println("Options:");
-    System.out.println("  --refresh=N     Set refresh interval in seconds (default: 5)");
     System.out.println("  --help, -h      Show this help message");
     System.out.println();
     System.out.println();
@@ -156,6 +143,7 @@ public class MtickyApplication {
     System.out.println("  a               Add stock symbol to watchlist");
     System.out.println("  d               Delete stock symbol from watchlist");
     System.out.println("  t               Change application theme");
+    System.out.println("  r               Change stock refresh interval");
     System.out.println("  q, Ctrl+C       Quit application");
   }
 }

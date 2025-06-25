@@ -31,7 +31,6 @@ import com.googlecode.lanterna.gui2.Window;
 import com.googlecode.lanterna.gui2.WindowListener;
 import com.googlecode.lanterna.gui2.table.Table;
 import com.googlecode.lanterna.gui2.table.TableModel;
-import com.googlecode.lanterna.gui2.dialogs.ListSelectDialog;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
 import com.googlecode.lanterna.screen.Screen;
@@ -53,6 +52,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Optional;
@@ -65,7 +65,6 @@ public class StockMonitorTui {
 
   private final ConfigManager configManager;
   private final ScheduledExecutorService executorService;
-  private final int refreshInterval;
   private final StockService stockService;
   private final ThemeLoader themeLoader;
 
@@ -73,6 +72,7 @@ public class StockMonitorTui {
   private static final int RIGHT_PAD_SPACES = 1;
   private static final int TOTAL_HORIZONTAL_PADDING = LEFT_PAD_SPACES + RIGHT_PAD_SPACES;
 
+  private ScheduledFuture<?> dataRefreshFuture;
   private FinnhubClient finnhubClient;
   private Terminal terminal;
   private Screen screen;
@@ -90,22 +90,14 @@ public class StockMonitorTui {
   private StockTableHeaderRenderer stockTableHeaderRenderer;
   private StockTableCellRenderer stockTableCellRenderer;
 
-  // Store column labels separately as Table does not expose getColumnLabels()
   private String[] columnLabels;
 
-  public StockMonitorTui(ConfigManager configManager, ScheduledExecutorService executorService,
-    int refreshInterval) {
+  public StockMonitorTui(ConfigManager configManager, ScheduledExecutorService executorService) {
     this.configManager = Objects.requireNonNull(configManager, "ConfigManager cannot be null");
     this.executorService = Objects.requireNonNull(executorService, "ExecutorService cannot be null");
-    if (refreshInterval <= 0) {
-      throw new IllegalArgumentException("Refresh interval must be positive");
-    }
-    this.refreshInterval = refreshInterval;
-    // this.finnhubClient = new FinnhubClient(System.getenv("FINNHUB_API_KEY"));
     this.stockService = new StockService();
     this.themeLoader = new ThemeLoader();
 
-    // Define column labels once
     this.columnLabels = new String[]{
       "Symbol",
       "Price",
@@ -114,7 +106,6 @@ public class StockMonitorTui {
       "Last Updated"
     };
 
-    // Initialize the renderers here
     this.stockTableHeaderRenderer = new StockTableHeaderRenderer(themeLoader, LEFT_PAD_SPACES);
     this.stockTableCellRenderer = new StockTableCellRenderer(themeLoader, LEFT_PAD_SPACES);
   }
@@ -127,36 +118,43 @@ public class StockMonitorTui {
     }
 
     initializeTerminal();
-
     loadThemeProperties();
+
+    // Apply theme early for pre-init dialogs
+    try {
+      textGUI.setTheme(themeLoader.createGuiTheme());
+    } catch (Exception e) {
+      logger.warn("Could not apply initial global GUI theme: {}", e.getMessage(), e);
+    }
 
     boolean apiKeyProvided = ensureApiKeyPresent();
     if (!apiKeyProvided) {
       logger.info("API Key not provided or cancelled. Exiting application.");
-      // Manual cleanup if TUI hasn't fully started
       if (terminal != null) terminal.close();
       if (screen != null) screen.stopScreen();
-      return; // Exit application
+      return;
     }
 
-    // Initialize FinnhubClient ONLY AFTER ensuring API key is available
     this.finnhubClient = new FinnhubClient(configManager.getFinnhubApiKey());
-    logger.info("FinnhubClient initialized with API Key.");
+    logger.info("FinnhubClient initialized.");
 
     initializeUiComponents();
-
     refreshAllStocks();
-
     startDataRefreshScheduler();
 
     textGUI.addWindowAndWait(mainWindow);
 
-    // After mainWindow is closed, perform final cleanup.
-    stop();
+    stop(); // Cleanup after mainWindow closes
   }
 
   public void stop() throws IOException {
     logger.info("Stopping TUI...");
+
+    // Cancel the scheduled task before shutting down the executor
+    if (dataRefreshFuture != null && !dataRefreshFuture.isDone()) {
+      dataRefreshFuture.cancel(true);
+      logger.info("Data refresh scheduler cancelled.");
+    }
 
     executorService.shutdownNow();
 
@@ -197,43 +195,36 @@ public class StockMonitorTui {
   private boolean ensureApiKeyPresent() {
     String apiKey = configManager.getFinnhubApiKey();
     if (apiKey != null && !apiKey.trim().isEmpty()) {
-      logger.info("Finnhub API Key found in configuration.");
       return true;
     }
-
-    logger.info("Finnhub API Key not found. Prompting user.");
 
     final AtomicBoolean keyProvided = new AtomicBoolean(false);
 
     new ThemedTextInputDialog(
       "Welcome to mticky!",
       "Please enter your Finnhub.io API key:",
-      "", // Initial empty input
+      "",
       themeLoader,
       new ThemedTextInputDialog.TextInputDialogCallback() {
         @Override
         public void onInput(String inputKey) {
-          if (inputKey != null && !inputKey.trim().isEmpty()) {
-            configManager.setFinnhubApiKey(inputKey.trim());
-            configManager.save();
-            keyProvided.set(true); // Set the flag directly
-            updateStatus("API Key saved.");
-            logger.info("API Key successfully entered and saved.");
-          } else {
-            updateStatus("API Key not provided. Application will exit.");
-            logger.warn("API Key input was empty or cancelled, application will exit.");
+          if (inputKey == null || inputKey.trim().isEmpty()) {
+            updateStatus("API key not provided. Application will exit.");
+            return;
           }
+          configManager.setFinnhubApiKey(inputKey.trim());
+          configManager.save();
+          keyProvided.set(true);
+          updateStatus("API key saved.");
         }
 
         @Override
         public void onCancel() {
-          updateStatus("API Key input cancelled. Application will exit.");
-          logger.warn("API Key input cancelled, application will exit.");
+          updateStatus("API key input cancelled. Application will exit.");
         }
       }
-    ).showModal(textGUI); // This call blocks until the dialog is closed by user action (OK/Cancel)
+    ).showModal(textGUI);
 
-    // After the dialog closes, the keyProvided AtomicBoolean will reflect the outcome.
     return keyProvided.get();
   }
 
@@ -241,22 +232,12 @@ public class StockMonitorTui {
     terminal = new DefaultTerminalFactory().createTerminal();
     screen = new TerminalScreen(terminal);
     screen.startScreen();
-
     textGUI = new MultiWindowTextGUI(screen, new DefaultWindowManager(), new EmptySpace());
   }
 
   private void loadThemeProperties() {
     String themeName = configManager.getTheme();
     themeLoader.loadTheme(themeName, configManager.getThemesDirectory());
-    logger.info("Loaded theme properties for: {}", themeName);
-
-            try {
-            textGUI.setTheme(themeLoader.createGuiTheme());
-            logger.info("Applied global GUI theme to MultiWindowTextGUI.");
-        } catch (Exception e) {
-            logger.warn("Could not apply initial global GUI theme: {}", e.getMessage(), e);
-        }
-    // Do not call applyColorsToComponents here directly, it's called after UI components are initialized
   }
 
   private void initializeUiComponents() {
@@ -265,13 +246,13 @@ public class StockMonitorTui {
     mainWindow.addWindowListener(createMainWindowListener());
 
     Panel mainPanel = new Panel(new BorderLayout());
-    this.headerPanel = new Panel(new LinearLayout(Direction.VERTICAL)); // ASSIGN TO FIELD HERE
+    headerPanel = new Panel(new LinearLayout(Direction.VERTICAL));
 
     headerPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
     statusLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + currentStatus);
     headerPanel.addComponent(statusLabel.withBorder(Borders.singleLine()));
     headerPanel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
-    mainPanel.addComponent(headerPanel, BorderLayout.Location.TOP); // ADD headerPanel to mainPanel
+    mainPanel.addComponent(headerPanel, BorderLayout.Location.TOP);
 
     stockTable = new Table<>(columnLabels);
     stockTable.setTableHeaderRenderer(stockTableHeaderRenderer);
@@ -280,25 +261,20 @@ public class StockMonitorTui {
 
     mainPanel.addComponent(stockTable, BorderLayout.Location.CENTER);
 
-    commandLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + "[A]dd [D]elete [T]heme [Q]uit");
+    commandLabel = new Label(" ".repeat(LEFT_PAD_SPACES) + "[A]dd [D]elete [T]heme [R]efresh Interval [Q]uit");
     mainPanel.addComponent(commandLabel.withBorder(Borders.singleLine()), BorderLayout.Location.BOTTOM);
 
     mainWindow.setComponent(mainPanel);
-
-    // Call applyColorsToComponents here initially
     applyColorsToComponents();
   }
 
   private WindowListener createMainWindowListener() {
     return new WindowListener() {
       @Override
-      public void onResized(Window window, TerminalSize oldSize, TerminalSize newSize) {
-
-      }
+      public void onResized(Window window, TerminalSize oldSize, TerminalSize newSize) { /* No-op */ }
 
       @Override
-      public void onMoved(Window window, TerminalPosition oldPosition, TerminalPosition newPosition) {
-      }
+      public void onMoved(Window window, TerminalPosition oldPosition, TerminalPosition newPosition) { /* No-op */ }
 
       @Override
       public void onInput(Window window, KeyStroke keyStroke, AtomicBoolean deliverEvent) {
@@ -314,17 +290,32 @@ public class StockMonitorTui {
   }
 
   private void startDataRefreshScheduler() {
-    executorService.scheduleAtFixedRate(
+    // Cancel existing task if any
+    if (dataRefreshFuture != null && !dataRefreshFuture.isDone()) {
+      dataRefreshFuture.cancel(true);
+      logger.info("Existing data refresh task cancelled.");
+    }
+
+    // Schedule new task with current interval from ConfigManager
+    int currentInterval = configManager.getRefreshIntervalSeconds();
+    dataRefreshFuture = executorService.scheduleAtFixedRate(
       this::refreshAllStocks,
-      refreshInterval,
-      refreshInterval,
+      currentInterval,
+      currentInterval,
       TimeUnit.SECONDS
     );
+    logger.info("Data refresh scheduled to run every {} seconds.", currentInterval);
   }
 
   private void refreshAllStocks() {
-    Set<String> watchlist = configManager.getWatchlist();
+    if (finnhubClient == null) {
+      updateStatus("API Key missing. Cannot refresh stocks.");
+      textGUI.getGUIThread().invokeLater(() -> stockData.clear());
+      textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
+      return;
+    }
 
+    Set<String> watchlist = configManager.getWatchlist();
     if (watchlist.isEmpty()) {
       updateStatus("No stocks in watchlist. Press 'a' to add some.");
       textGUI.getGUIThread().invokeLater(() -> stockTable.getTableModel().clear());
@@ -334,6 +325,7 @@ public class StockMonitorTui {
     updateStatus("Refreshing " + watchlist.size() + " stocks...");
 
     List<String> failedSymbols = new ArrayList<>();
+    CountDownLatch latch = new CountDownLatch(watchlist.size());
 
     for (String symbol : watchlist) {
       finnhubClient.getStockQuote(symbol)
@@ -342,40 +334,43 @@ public class StockMonitorTui {
             stockData.put(symbol, optionalQuote.get());
           } else {
             logger.warn("No quote available for symbol: {}", symbol);
-            synchronized (failedSymbols) {
-              failedSymbols.add(symbol);
-            }
+            synchronized (failedSymbols) { failedSymbols.add(symbol); }
           }
-          textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
+          latch.countDown();
         })
         .exceptionally(throwable -> {
           logger.warn("Failed to fetch quote for {}", symbol, throwable);
-          synchronized (failedSymbols) {
-            failedSymbols.add(symbol);
-          }
+          synchronized (failedSymbols) { failedSymbols.add(symbol); }
+          latch.countDown();
           return null;
         });
     }
 
-    // Delay status update to avoid polluting the UI with each failure
-    executorService.schedule(() -> {
-      if (!failedSymbols.isEmpty()) {
-        updateStatus("Updated with errors: " + String.join(", ", failedSymbols));
+    executorService.submit(() -> {
+      try {
+        latch.await(configManager.getRefreshIntervalSeconds(), TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        logger.warn("Stock refresh interrupted while waiting for all quotes.", e);
+      } finally {
+        textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
+        if (!failedSymbols.isEmpty()) {
+          updateStatus("Updated with errors: " + String.join(", ", failedSymbols));
+        } else if (!watchlist.isEmpty()) {
+          updateStatus(String.format("Updated %d stocks at %s", stockData.size(), stockService.formatTimestamp(LocalDateTime.now())));
+        } else {
+          updateStatus("Ready - Press 'a' to add stocks to watchlist");
+        }
       }
-    }, refreshInterval / 2, TimeUnit.SECONDS); // Delay enough for most tasks to complete
+    });
   }
-
 
   private void updateTableDisplay() {
     textGUI.getGUIThread().invokeLater(() -> {
       String symbolToReSelect = null;
       int currentSelectedRow = stockTable.getSelectedRow();
-      if (currentSelectedRow != -1 && currentSelectedRow < stockTable.getTableModel().getRowCount()) {
-        if (stockTable.getTableModel().getRowCount() > 0) {
-          if (currentSelectedRow < stockTable.getTableModel().getRowCount()) {
-            symbolToReSelect = stockTable.getTableModel().getRow(currentSelectedRow).get(0).trim();
-          }
-        }
+      if (currentSelectedRow != -1 && stockTable.getTableModel().getRowCount() > 0 && currentSelectedRow < stockTable.getTableModel().getRowCount()) {
+        symbolToReSelect = stockTable.getTableModel().getRow(currentSelectedRow).get(0).trim();
       }
 
       int symbolColContentWidth = "Symbol".length();
@@ -397,9 +392,7 @@ public class StockMonitorTui {
       int newSelectionIndex = -1;
       int currentRowIndex = 0;
 
-      for (Map.Entry<String, StockQuote> entry : stockData.entrySet().stream()
-      .sorted(Map.Entry.comparingByKey())
-      .toList()) {
+      for (Map.Entry<String, StockQuote> entry : stockData.entrySet().stream().sorted(Map.Entry.comparingByKey()).toList()) {
         StockQuote quote = entry.getValue();
 
         String[] row = {
@@ -419,24 +412,12 @@ public class StockMonitorTui {
 
       if (newSelectionIndex != -1) {
         stockTable.setSelectedRow(newSelectionIndex);
-        updateStatus(String.format("Updated %d stocks at %s",
-          stockData.size(),
-          stockService.formatTimestamp(LocalDateTime.now())));
-        return;
-      }
-
-      if (stockData.isEmpty()) {
-        updateStatus("Ready - Press 'a' to add stocks to watchlist");
         return;
       }
 
       if (stockTable.getTableModel().getRowCount() > 0) {
         stockTable.setSelectedRow(0);
       }
-
-      updateStatus(String.format("Updated %d stocks at %s",
-        stockData.size(),
-        stockService.formatTimestamp(LocalDateTime.now())));
     });
   }
 
@@ -446,7 +427,7 @@ public class StockMonitorTui {
       if (statusLabel != null) {
         statusLabel.setText(" ".repeat(LEFT_PAD_SPACES) + currentStatus);
         try {
-          screen.refresh(); // <-- Apply try-catch here
+          screen.refresh();
         } catch (IOException e) {
           logger.error("Error refreshing screen after status update: {}", e.getMessage(), e);
         }
@@ -462,9 +443,7 @@ public class StockMonitorTui {
       return;
     }
 
-    if (keyStroke.getKeyType() == KeyType.EOF ||
-  (keyStroke.isCtrlDown() && keyStroke.getKeyType() == KeyType.Character &&
-    keyStroke.getCharacter() == 'c')) {
+    if (keyStroke.getKeyType() == KeyType.EOF || (keyStroke.isCtrlDown() && keyStroke.getKeyType() == KeyType.Character && keyStroke.getCharacter() == 'c')) {
       performShutdown("Ctrl+C or EOF detected");
     }
   }
@@ -480,6 +459,9 @@ public class StockMonitorTui {
       case 't':
       handleChangeTheme();
       break;
+      case 'r':
+      handleChangeRefreshInterval();
+      break;
       case 'q':
       performShutdown("'q' key pressed");
       break;
@@ -491,13 +473,9 @@ public class StockMonitorTui {
   private void performShutdown(String reason) {
     logger.info("Initiating shutdown: {}", reason);
     new ThemedMessageDialog("Confirm Exit", "Are you sure you want to exit?", themeLoader, true, () -> {
-      // This callback runs if user clicks OK on the confirmation dialog
-      // Explicitly close the main window. This will cause addWindowAndWait() in start() to return.
       if (mainWindow != null) {
-        mainWindow.close(); // NEW: Programmatically close the main window
+        mainWindow.close();
       }
-      // The rest of the cleanup (executor, screen, terminal) happens in the stop() method
-      // which is now called right after addWindowAndWait() returns in the start() method.
     }).showDialog(textGUI);
   }
 
@@ -529,18 +507,15 @@ public class StockMonitorTui {
 
           updateStatus("Adding " + normalizedSymbol + " to watchlist...");
 
-
           finnhubClient.getStockQuote(normalizedSymbol)
             .thenAccept(optionalQuote -> {
               if (optionalQuote.isPresent()) {
                 configManager.save();
-
-                StockQuote quote = optionalQuote.get();
-                stockData.put(normalizedSymbol, quote);
+                stockData.put(normalizedSymbol, optionalQuote.get());
                 textGUI.getGUIThread().invokeLater(StockMonitorTui.this::updateTableDisplay);
                 showInfoMessage("Success", "Stock '" + normalizedSymbol + "' added and data fetched.");
               } else {
-                showErrorDialog("No Data", "Stock '" + normalizedSymbol + "' not added.");
+                showErrorDialog("No Data", "Stock '" + normalizedSymbol + "' not found or no data available.");
                 configManager.removeFromWatchlist(normalizedSymbol);
                 configManager.save();
                 stockData.remove(normalizedSymbol);
@@ -567,7 +542,6 @@ public class StockMonitorTui {
     addDialog.showDialog(textGUI);
   }
 
-
   private void handleDeleteStock() {
     if (configManager.getWatchlist().isEmpty()) {
       new ThemedMessageDialog("Delete Stock", "Watchlist is empty. Nothing to delete.", themeLoader, null).showDialog(textGUI);
@@ -587,26 +561,20 @@ public class StockMonitorTui {
       }
 
       String normalizedSymbol = selectedSymbol.trim().toUpperCase();
-
       if (!configManager.removeFromWatchlist(normalizedSymbol)) {
         showErrorDialog("Not Found", normalizedSymbol + " is not in the watchlist.");
         return;
       }
 
       stockData.remove(normalizedSymbol);
-
       configManager.save();
-
       textGUI.getGUIThread().invokeLater(this::updateTableDisplay);
-
       showInfoMessage("Success", "Stock '" + normalizedSymbol + "' removed from watchlist.");
     };
   }
 
   private void showErrorDialog(String title, String message) {
-    textGUI.getGUIThread().invokeLater(() -> {
-      new ThemedMessageDialog(title, message, themeLoader, null).showDialog(textGUI);
-    });
+    textGUI.getGUIThread().invokeLater(() -> new ThemedMessageDialog(title, message, themeLoader, null).showDialog(textGUI));
   }
 
   private void showInfoMessage(String title, String message) {
@@ -614,15 +582,7 @@ public class StockMonitorTui {
   }
 
   private void showInfoMessage(String title, String message, Runnable onClosed) {
-    textGUI.getGUIThread().invokeLater(() -> {
-      ThemedMessageDialog messageDialog = new ThemedMessageDialog(
-        title,
-        message,
-        themeLoader,
-        onClosed
-      );
-      messageDialog.showDialog(textGUI);
-    });
+    textGUI.getGUIThread().invokeLater(() -> new ThemedMessageDialog(title, message, themeLoader, onClosed).showDialog(textGUI));
   }
 
   private void handleTableSelection() {
@@ -653,7 +613,7 @@ public class StockMonitorTui {
 
   private Consumer<String> createChangeThemeAction(String currentTheme) {
     return selectedThemeName -> {
-      if (selectedThemeName == null || selectedThemeName.trim().isEmpty()) { 
+      if (selectedThemeName == null || selectedThemeName.trim().isEmpty()) {
         updateStatus("Theme change cancelled or invalid input.");
         return;
       }
@@ -671,7 +631,6 @@ public class StockMonitorTui {
 
       textGUI.getGUIThread().invokeLater(() -> {
         applyColorsToComponents();
-
         stockTableHeaderRenderer = new StockTableHeaderRenderer(themeLoader, LEFT_PAD_SPACES);
         stockTableCellRenderer = new StockTableCellRenderer(themeLoader, LEFT_PAD_SPACES);
 
@@ -680,6 +639,7 @@ public class StockMonitorTui {
           stockTableCellRenderer.setNegativeChangeColor(themeLoader.getNegativeChangeColor());
         }
 
+        // Preserve table data and selection when recreating
         List<List<String>> currentTableRows = new ArrayList<>();
         for (int r = 0; r < stockTable.getTableModel().getRowCount(); r++) {
           currentTableRows.add(new ArrayList<>(stockTable.getTableModel().getRow(r)));
@@ -687,7 +647,6 @@ public class StockMonitorTui {
         int currentSelectedRow = stockTable.getSelectedRow();
 
         Table<String> newStockTable = new Table<>(columnLabels);
-
         newStockTable.setTableHeaderRenderer(stockTableHeaderRenderer);
         newStockTable.setTableCellRenderer(stockTableCellRenderer);
         newStockTable.setSelectAction(this::handleTableSelection);
@@ -704,9 +663,7 @@ public class StockMonitorTui {
           .ifPresent(mainPanel::removeComponent);
 
         mainPanel.addComponent(newStockTable, BorderLayout.Location.CENTER);
-
         stockTable = newStockTable;
-
         mainWindow.setComponent(mainPanel);
 
         stockTable.invalidate();
@@ -723,6 +680,48 @@ public class StockMonitorTui {
     };
   }
 
+  private void handleChangeRefreshInterval() {
+    String currentInterval = String.valueOf(configManager.getRefreshIntervalSeconds());
+    new ThemedTextInputDialog(
+      "Refresh Interval",
+      "Enter new refresh interval in seconds (e.g., 5, 10, 30):",
+      currentInterval,
+      themeLoader,
+      new ThemedTextInputDialog.TextInputDialogCallback() {
+        @Override
+        public void onInput(String input) {
+          if (input == null || input.trim().isEmpty()) {
+            showInfoMessage("Warning", "Refresh interval cannot be empty.");
+            return;
+          }
+          try {
+            int newInterval = Integer.parseInt(input.trim());
+            if (newInterval <= 0) {
+              showErrorDialog("Invalid Input", "Refresh interval must be a positive number.");
+              return;
+            }
+            if (newInterval == configManager.getRefreshIntervalSeconds()) {
+              updateStatus("Refresh interval already set to " + newInterval + " seconds.");
+              return;
+            }
+            configManager.setRefreshIntervalSeconds(newInterval);
+            configManager.save();
+            updateStatus("Refresh interval set to " + newInterval + " seconds. Restarting data fetch...");
+            startDataRefreshScheduler(); // Restart the scheduler with the new interval
+            showInfoMessage("Success", "Refresh interval updated to " + newInterval + " seconds.");
+          } catch (NumberFormatException e) {
+            showErrorDialog("Invalid Input", "Please enter a valid number for the interval.");
+          }
+        }
+
+        @Override
+        public void onCancel() {
+          updateStatus("Refresh interval change cancelled.");
+        }
+      }
+    ).showModal(textGUI);
+  }
+
   private String formatTableCell(String value, int maxContentWidth) {
     String paddedValue = " ".repeat(LEFT_PAD_SPACES) + value;
     int effectiveContentWidth = Math.max(value.length(), maxContentWidth);
@@ -731,22 +730,14 @@ public class StockMonitorTui {
   }
 
   private void applyColorsToComponents() {
-    if (mainWindow == null) {
-      return;
-    }
+    if (mainWindow == null) return;
 
-    // Apply PropertyTheme to the GUI
     try {
-      Theme guiTheme = themeLoader.createGuiTheme();
-      textGUI.setTheme(guiTheme);
-      logger.info("Applied GUI theme to TextGUI via PropertyTheme.");
+      textGUI.setTheme(themeLoader.createGuiTheme());
     } catch (Exception e) {
       logger.warn("Could not create or apply PropertyTheme to GUI: {}", e.getMessage(), e);
     }
 
-    // Manually apply specific colors if they are not part of PropertyTheme's standard keys.
-    // This is especially for your custom 'positive_change_fg' and 'negative_change_fg'.
-    // Ensure your renderers have access to these.
     if (stockTableCellRenderer != null) {
       stockTableCellRenderer.setPositiveChangeColor(themeLoader.getPositiveChangeColor());
       stockTableCellRenderer.setNegativeChangeColor(themeLoader.getNegativeChangeColor());
@@ -767,8 +758,6 @@ public class StockMonitorTui {
         .filter(c -> c instanceof Label)
         .map(c -> (Label) c)
         .forEach(label -> {
-          // The title label no longer exists directly, it's implicitly handled by theme or removed.
-          // Assuming this was for general labels, apply mainFg.
           label.setForegroundColor(mainFg);
           label.setBackgroundColor(mainBg);
         });
@@ -782,6 +771,5 @@ public class StockMonitorTui {
       commandLabel.setForegroundColor(highlightFg);
       commandLabel.setBackgroundColor(mainBg);
     }
-    // No screen.clear() or screen.refresh() here, as this is handled by handleChangeTheme and initializeTerminal.
   }
 }
