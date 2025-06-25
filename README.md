@@ -52,7 +52,8 @@ The application will prompt you for your Finnhub API key on its first run. Once 
    ```bash
    java -jar target/mticky.jar
    ```
-5. ### Run from Binary (Alternative)
+
+### Run from Binary (Alternative)
 For a quicker start, you can download the pre-built binaries from the [releases page](https://github.com/lyubomir-bozhinov/mticky/releases).
 
 1.  **Download the appropriate binary** for your operating system and architecture (e.g., `mticky-vX.Y.Z-linux-amd64.tar.gz` for Linux 64-bit, `mticky-vX.Y.Z-windows-amd64.zip` for Windows 64-bit).
