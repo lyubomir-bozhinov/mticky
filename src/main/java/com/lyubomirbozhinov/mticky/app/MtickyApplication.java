@@ -40,7 +40,6 @@ public class MtickyApplication {
     
     try {
       app.parseArguments(args);
-      // app.validateEnvironment();
       app.initialize();
       app.run();
     } catch (Exception e) {
@@ -74,18 +73,6 @@ public class MtickyApplication {
       } else {
         throw new IllegalArgumentException("Unknown argument: " + arg);
       }
-    }
-  }
-  
-  /**
-   * Validates that required environment variables are set.
-   */
-  private void validateEnvironment() {
-    String apiKey = System.getenv("FINNHUB_API_KEY");
-    if (apiKey == null || apiKey.trim().isEmpty()) {
-      throw new IllegalStateException(
-          "FINNHUB_API_KEY environment variable is required. "
-          + "Get your API key from https://finnhub.io and set it as an environment variable.");
     }
   }
   
@@ -156,7 +143,7 @@ public class MtickyApplication {
    * Prints usage information.
    */
   private void printUsage() {
-    System.out.println("mticky - TUI Stock Monitor");
+    System.out.println("mticky - A simple Java stock monitor for terminal dwellers");
     System.out.println();
     System.out.println("Usage: java -jar mticky.jar [OPTIONS]");
     System.out.println();
@@ -164,12 +151,11 @@ public class MtickyApplication {
     System.out.println("  --refresh=N     Set refresh interval in seconds (default: 5)");
     System.out.println("  --help, -h      Show this help message");
     System.out.println();
-    System.out.println("Environment Variables:");
-    System.out.println("  FINNHUB_API_KEY Required API key from https://finnhub.io");
     System.out.println();
     System.out.println("Controls:");
     System.out.println("  a               Add stock symbol to watchlist");
     System.out.println("  d               Delete stock symbol from watchlist");
+    System.out.println("  t               Change application theme");
     System.out.println("  q, Ctrl+C       Quit application");
   }
 }
