@@ -27,7 +27,7 @@ public class ConfigManager {
   private static final String CONFIG_FILE_NAME = "config.properties";
   private static final String LOGS_SUBDIR_NAME = "logs";
   private static final String THEMES_SUBDIR_NAME = "themes";
-
+  private static final String FINNHUB_API_KEY = "finnhub_api_key";
   private static final String WATCHLIST_KEY = "watchlist";
   private static final String WATCHLIST_SEPARATOR = ",";
   private static final String THEME_KEY = "theme";
@@ -47,6 +47,8 @@ public class ConfigManager {
 
   private final Properties applicationProperties;
   private final Set<String> watchlist;
+
+  private String finnhubApiKey;
 
   public ConfigManager() {
     String homeDir = System.getProperty("user.home");
@@ -89,6 +91,12 @@ public class ConfigManager {
       saveWatchlistToProperties();
       saveThemeToProperties();
 
+      if (this.finnhubApiKey != null && !this.finnhubApiKey.trim().isEmpty()) {
+        applicationProperties.setProperty(FINNHUB_API_KEY, this.finnhubApiKey.trim());
+      } else {
+        applicationProperties.remove(FINNHUB_API_KEY); // Remove key if it's null or empty
+      }
+
       try (OutputStream output = Files.newOutputStream(appConfigFile)) {
         applicationProperties.store(output, "mticky configuration");
         logger.debug("Configuration saved to: {}", appConfigFile);
@@ -111,6 +119,9 @@ public class ConfigManager {
       applicationProperties.load(input);
       loadWatchlistFromProperties();
       loadThemeFromProperties();
+
+      this.finnhubApiKey = applicationProperties.getProperty(FINNHUB_API_KEY);
+
       logger.info("Configuration loaded from: {}", appConfigFile);
     }
   }
@@ -267,6 +278,15 @@ public class ConfigManager {
 
   public Path getThemesDirectory() {
     return themesDirectory;
+  }
+
+  public String getFinnhubApiKey() {
+    return this.finnhubApiKey;
+  }
+
+  public void setFinnhubApiKey(String finnhubApiKey) {
+    this.finnhubApiKey = (finnhubApiKey != null && !finnhubApiKey.trim().isEmpty()) ? finnhubApiKey.trim() : null;
+    logger.debug("Finnhub API Key set (value masked for logging)");
   }
 }
 
