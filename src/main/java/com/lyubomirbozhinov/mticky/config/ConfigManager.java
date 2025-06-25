@@ -126,6 +126,7 @@ public class ConfigManager {
       applicationProperties.load(input);
       loadWatchlistFromProperties();
       loadThemeFromProperties();
+      loadRefreshIntervalFromProperties();
 
       this.finnhubApiKey = applicationProperties.getProperty(FINNHUB_API_KEY);
 
@@ -158,11 +159,11 @@ public class ConfigManager {
     logger.info("Set default theme to: {}", DEFAULT_THEME);
   }
 
-      private void setDefaultRefreshInterval() {
-        applicationProperties.setProperty(REFRESH_INTERVAL_KEY, String.valueOf(DEFAULT_REFRESH_INTERVAL_SECONDS));
-        this.refreshIntervalSeconds = DEFAULT_REFRESH_INTERVAL_SECONDS;
-        logger.info("Set default refresh interval to: {}s", DEFAULT_REFRESH_INTERVAL_SECONDS);
-    }
+  private void setDefaultRefreshInterval() {
+    applicationProperties.setProperty(REFRESH_INTERVAL_KEY, String.valueOf(DEFAULT_REFRESH_INTERVAL_SECONDS));
+    this.refreshIntervalSeconds = DEFAULT_REFRESH_INTERVAL_SECONDS;
+    logger.info("Set default refresh interval to: {}s", DEFAULT_REFRESH_INTERVAL_SECONDS);
+  }
 
   private void saveWatchlistToProperties() {
     String watchlistStr = watchlist.stream()
@@ -171,10 +172,31 @@ public class ConfigManager {
     applicationProperties.setProperty(WATCHLIST_KEY, watchlistStr);
   }
 
-      private void saveRefreshIntervalToProperties() {
-        applicationProperties.setProperty(REFRESH_INTERVAL_KEY, String.valueOf(this.refreshIntervalSeconds));
-        logger.debug("Refresh interval property prepared for saving: {}s", this.refreshIntervalSeconds);
+  private void loadRefreshIntervalFromProperties() {
+    String intervalStr = applicationProperties.getProperty(REFRESH_INTERVAL_KEY);
+    if (intervalStr != null) {
+      try {
+        int loadedInterval = Integer.parseInt(intervalStr.trim());
+        if (loadedInterval >= 1) {
+          this.refreshIntervalSeconds = loadedInterval;
+          logger.info("Loaded refresh interval: {}s", loadedInterval);
+          return;
+        } else {
+          logger.warn("Invalid refresh interval value loaded from config: {}. Using default: {}s", intervalStr, DEFAULT_REFRESH_INTERVAL_SECONDS);
+        }
+      } catch (NumberFormatException e) {
+        logger.warn("Failed to parse refresh interval from config: {}. Using default: {}s", intervalStr, DEFAULT_REFRESH_INTERVAL_SECONDS);
+      }
+    } else {
+      logger.info("No refresh interval found in properties. Using default: {}s", DEFAULT_REFRESH_INTERVAL_SECONDS);
     }
+    this.refreshIntervalSeconds = DEFAULT_REFRESH_INTERVAL_SECONDS;
+  }
+
+  private void saveRefreshIntervalToProperties() {
+    applicationProperties.setProperty(REFRESH_INTERVAL_KEY, String.valueOf(this.refreshIntervalSeconds));
+    logger.debug("Refresh interval property prepared for saving: {}s", this.refreshIntervalSeconds);
+  }
 
   private void loadThemeFromProperties() {
     String themeName = applicationProperties.getProperty(THEME_KEY);
@@ -307,18 +329,18 @@ public class ConfigManager {
     logger.debug("Finnhub API Key set (value masked for logging)");
   }
 
-      public int getRefreshIntervalSeconds() {
-        return refreshIntervalSeconds;
-    }
+  public int getRefreshIntervalSeconds() {
+    return refreshIntervalSeconds;
+  }
 
-    public void setRefreshIntervalSeconds(int refreshIntervalSeconds) {
-        if (refreshIntervalSeconds >= 1) {
-            this.refreshIntervalSeconds = refreshIntervalSeconds;
-            logger.info("Refresh interval set to: {}s", refreshIntervalSeconds);
-        } else {
-            logger.warn("Attempted to set invalid refresh interval: {}s. Keeping current value.", refreshIntervalSeconds);
-        }
+  public void setRefreshIntervalSeconds(int refreshIntervalSeconds) {
+    if (refreshIntervalSeconds >= 1) {
+      this.refreshIntervalSeconds = refreshIntervalSeconds;
+      logger.info("Refresh interval set to: {}s", refreshIntervalSeconds);
+    } else {
+      logger.warn("Attempted to set invalid refresh interval: {}s. Keeping current value.", refreshIntervalSeconds);
     }
+  }
 }
 
 
