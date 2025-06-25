@@ -40,7 +40,7 @@ public class MtickyApplication {
     
     try {
       app.parseArguments(args);
-      app.validateEnvironment();
+      // app.validateEnvironment();
       app.initialize();
       app.run();
     } catch (Exception e) {

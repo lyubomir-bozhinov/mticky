@@ -53,7 +53,7 @@ public class ThemedTextInputDialog extends BasicWindow {
     Panel textBoxPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
     textBoxPanel.setFillColorOverride(themeLoader.getMainBackgroundColor());
     textBoxPanel.addComponent(new EmptySpace(new TerminalSize(PAD_SPACES, 0)));
-    textBox = new TextBox(new TerminalSize(initialValue.length() + 6, 1), initialValue);
+    textBox = new TextBox(new TerminalSize(initialValue.length() + 20, 1), initialValue);
     textBoxPanel.addComponent(textBox);
     mainContentPanel.addComponent(textBoxPanel);
 
@@ -89,6 +89,10 @@ public class ThemedTextInputDialog extends BasicWindow {
 
   public void showDialog(MultiWindowTextGUI textGUI) {
     textGUI.addWindow(this);
+  }
+
+  public void showModal(MultiWindowTextGUI textGUI) {
+    textGUI.addWindowAndWait(this); // block until the dialog is closed
   }
 }
 

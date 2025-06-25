@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,7 +66,6 @@ public class StockMonitorTui {
   private final ConfigManager configManager;
   private final ScheduledExecutorService executorService;
   private final int refreshInterval;
-  private final FinnhubClient finnhubClient;
   private final StockService stockService;
   private final ThemeLoader themeLoader;
 
@@ -73,6 +73,7 @@ public class StockMonitorTui {
   private static final int RIGHT_PAD_SPACES = 1;
   private static final int TOTAL_HORIZONTAL_PADDING = LEFT_PAD_SPACES + RIGHT_PAD_SPACES;
 
+  private FinnhubClient finnhubClient;
   private Terminal terminal;
   private Screen screen;
   private MultiWindowTextGUI textGUI;
@@ -100,7 +101,7 @@ public class StockMonitorTui {
       throw new IllegalArgumentException("Refresh interval must be positive");
     }
     this.refreshInterval = refreshInterval;
-    this.finnhubClient = new FinnhubClient(System.getenv("FINNHUB_API_KEY"));
+    // this.finnhubClient = new FinnhubClient(System.getenv("FINNHUB_API_KEY"));
     this.stockService = new StockService();
     this.themeLoader = new ThemeLoader();
 
@@ -128,6 +129,19 @@ public class StockMonitorTui {
     initializeTerminal();
 
     loadThemeProperties();
+
+    boolean apiKeyProvided = ensureApiKeyPresent();
+    if (!apiKeyProvided) {
+      logger.info("API Key not provided or cancelled. Exiting application.");
+      // Manual cleanup if TUI hasn't fully started
+      if (terminal != null) terminal.close();
+      if (screen != null) screen.stopScreen();
+      return; // Exit application
+    }
+
+    // Initialize FinnhubClient ONLY AFTER ensuring API key is available
+    this.finnhubClient = new FinnhubClient(configManager.getFinnhubApiKey());
+    logger.info("FinnhubClient initialized with API Key.");
 
     initializeUiComponents();
 
@@ -180,6 +194,49 @@ public class StockMonitorTui {
     return true;
   }
 
+  private boolean ensureApiKeyPresent() {
+    String apiKey = configManager.getFinnhubApiKey();
+    if (apiKey != null && !apiKey.trim().isEmpty()) {
+      logger.info("Finnhub API Key found in configuration.");
+      return true;
+    }
+
+    logger.info("Finnhub API Key not found. Prompting user.");
+
+    final AtomicBoolean keyProvided = new AtomicBoolean(false);
+
+    new ThemedTextInputDialog(
+      "Welcome to mticky!",
+      "Please enter your Finnhub.io API key:",
+      "", // Initial empty input
+      themeLoader,
+      new ThemedTextInputDialog.TextInputDialogCallback() {
+        @Override
+        public void onInput(String inputKey) {
+          if (inputKey != null && !inputKey.trim().isEmpty()) {
+            configManager.setFinnhubApiKey(inputKey.trim());
+            configManager.save();
+            keyProvided.set(true); // Set the flag directly
+            updateStatus("API Key saved.");
+            logger.info("API Key successfully entered and saved.");
+          } else {
+            updateStatus("API Key not provided. Application will exit.");
+            logger.warn("API Key input was empty or cancelled, application will exit.");
+          }
+        }
+
+        @Override
+        public void onCancel() {
+          updateStatus("API Key input cancelled. Application will exit.");
+          logger.warn("API Key input cancelled, application will exit.");
+        }
+      }
+    ).showModal(textGUI); // This call blocks until the dialog is closed by user action (OK/Cancel)
+
+    // After the dialog closes, the keyProvided AtomicBoolean will reflect the outcome.
+    return keyProvided.get();
+  }
+
   private void initializeTerminal() throws IOException {
     terminal = new DefaultTerminalFactory().createTerminal();
     screen = new TerminalScreen(terminal);
@@ -192,6 +249,13 @@ public class StockMonitorTui {
     String themeName = configManager.getTheme();
     themeLoader.loadTheme(themeName, configManager.getThemesDirectory());
     logger.info("Loaded theme properties for: {}", themeName);
+
+            try {
+            textGUI.setTheme(themeLoader.createGuiTheme());
+            logger.info("Applied global GUI theme to MultiWindowTextGUI.");
+        } catch (Exception e) {
+            logger.warn("Could not apply initial global GUI theme: {}", e.getMessage(), e);
+        }
     // Do not call applyColorsToComponents here directly, it's called after UI components are initialized
   }
 
