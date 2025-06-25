@@ -32,6 +32,8 @@ public class ConfigManager {
   private static final String WATCHLIST_SEPARATOR = ",";
   private static final String THEME_KEY = "theme";
   private static final String DEFAULT_THEME = "tokyo-night";
+  private static final String REFRESH_INTERVAL_KEY = "refresh_interval_seconds";
+  private static final int DEFAULT_REFRESH_INTERVAL_SECONDS = 15;
 
   private static final List<String> BUNDLED_THEME_FILENAMES = Arrays.asList(
     "catppuccin.theme",
@@ -50,6 +52,8 @@ public class ConfigManager {
 
   private String finnhubApiKey;
 
+  private int refreshIntervalSeconds;
+
   public ConfigManager() {
     String homeDir = System.getProperty("user.home");
     this.appConfigDir = Paths.get(homeDir, APP_DIR_NAME);
@@ -58,6 +62,7 @@ public class ConfigManager {
     this.themesDirectory = appConfigDir.resolve(THEMES_SUBDIR_NAME);
     this.applicationProperties = new Properties();
     this.watchlist = ConcurrentHashMap.newKeySet();
+    this.refreshIntervalSeconds = DEFAULT_REFRESH_INTERVAL_SECONDS;
   }
 
   public void initialize() {
@@ -82,6 +87,7 @@ public class ConfigManager {
     addDefaultWatchlistItems();
     setDefaultTheme();
     copyBundledThemes();
+    setDefaultRefreshInterval();
     save();
     logger.info("Configuration initialized. Watchlist contains {} symbols, Theme: {}", watchlist.size(), getTheme());
   }
@@ -90,6 +96,7 @@ public class ConfigManager {
     try {
       saveWatchlistToProperties();
       saveThemeToProperties();
+      saveRefreshIntervalToProperties();
 
       if (this.finnhubApiKey != null && !this.finnhubApiKey.trim().isEmpty()) {
         applicationProperties.setProperty(FINNHUB_API_KEY, this.finnhubApiKey.trim());
@@ -151,12 +158,23 @@ public class ConfigManager {
     logger.info("Set default theme to: {}", DEFAULT_THEME);
   }
 
+      private void setDefaultRefreshInterval() {
+        applicationProperties.setProperty(REFRESH_INTERVAL_KEY, String.valueOf(DEFAULT_REFRESH_INTERVAL_SECONDS));
+        this.refreshIntervalSeconds = DEFAULT_REFRESH_INTERVAL_SECONDS;
+        logger.info("Set default refresh interval to: {}s", DEFAULT_REFRESH_INTERVAL_SECONDS);
+    }
+
   private void saveWatchlistToProperties() {
     String watchlistStr = watchlist.stream()
     .sorted()
     .collect(Collectors.joining(WATCHLIST_SEPARATOR));
     applicationProperties.setProperty(WATCHLIST_KEY, watchlistStr);
   }
+
+      private void saveRefreshIntervalToProperties() {
+        applicationProperties.setProperty(REFRESH_INTERVAL_KEY, String.valueOf(this.refreshIntervalSeconds));
+        logger.debug("Refresh interval property prepared for saving: {}s", this.refreshIntervalSeconds);
+    }
 
   private void loadThemeFromProperties() {
     String themeName = applicationProperties.getProperty(THEME_KEY);
@@ -288,6 +306,19 @@ public class ConfigManager {
     this.finnhubApiKey = (finnhubApiKey != null && !finnhubApiKey.trim().isEmpty()) ? finnhubApiKey.trim() : null;
     logger.debug("Finnhub API Key set (value masked for logging)");
   }
+
+      public int getRefreshIntervalSeconds() {
+        return refreshIntervalSeconds;
+    }
+
+    public void setRefreshIntervalSeconds(int refreshIntervalSeconds) {
+        if (refreshIntervalSeconds >= 1) {
+            this.refreshIntervalSeconds = refreshIntervalSeconds;
+            logger.info("Refresh interval set to: {}s", refreshIntervalSeconds);
+        } else {
+            logger.warn("Attempted to set invalid refresh interval: {}s. Keeping current value.", refreshIntervalSeconds);
+        }
+    }
 }
 
 
