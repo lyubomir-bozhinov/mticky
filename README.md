@@ -46,9 +46,7 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
    ```
 
 3. **Set up your API key:**
-   ```bash
-   export FINNHUB_API_KEY="your_api_key_here"
-   ```
+The application will prompt you for your Finnhub API key on its first run. Once provided, the key will be saved in your local configuration for future use.
 
 4. **Run the application:**
    ```bash
@@ -88,12 +86,6 @@ java -jar mticky.jar --help
 ```
 
 ## Configuration
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FINNHUB_API_KEY` | Yes | Your Finnhub API key from [finnhub.io](https://finnhub.io) |
 
 ### Configuration Files
 
@@ -295,10 +287,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for deta
    ```bash
    # Install dependencies
    mvn clean install
-   
-   # Set up git hooks
-   cp scripts/pre-commit .git/hooks/
-   chmod +x .git/hooks/pre-commit
    ```
 
 4. **Run the development version:**
