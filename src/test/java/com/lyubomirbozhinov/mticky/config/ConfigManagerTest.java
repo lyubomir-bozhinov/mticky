@@ -374,5 +374,105 @@ class ConfigManagerTest {
     String currentContent = Files.readString(existingThemeFile);
     assertEquals(modifiedContent, currentContent);
   }
+
+  @Test
+  void testDefaultRefreshIntervalWhenConfigMissing() {
+    // Ensure no config exists before initialization
+    assertFalse(Files.exists(configManager.getConfigFile()));
+    configManager.initialize();
+    assertEquals(15, configManager.getRefreshIntervalSeconds());
+  }
+
+  @Test
+  void testRefreshIntervalLoadsFromConfigFile() throws IOException {
+    Path configFile = configManager.getConfigFile();
+    Files.createDirectories(configFile.getParent());
+    Properties props = new Properties();
+    props.setProperty("refresh_interval_seconds", "30");
+    try (OutputStream os = Files.newOutputStream(configFile)) {
+      props.store(os, "Config with refresh interval");
+    }
+
+    configManager = new ConfigManager();
+    configManager.initialize();
+    assertEquals(30, configManager.getRefreshIntervalSeconds());
+  }
+
+  @Test
+  void testInvalidRefreshIntervalDefaultsTo15() throws IOException {
+    Path configFile = configManager.getConfigFile();
+    Files.createDirectories(configFile.getParent());
+    Properties props = new Properties();
+    props.setProperty("refresh_interval_seconds", "-10");
+    try (OutputStream os = Files.newOutputStream(configFile)) {
+      props.store(os, "Config with invalid refresh interval");
+    }
+
+    configManager = new ConfigManager();
+    configManager.initialize();
+    assertEquals(15, configManager.getRefreshIntervalSeconds());
+  }
+
+  @Test
+  void testNonNumericRefreshIntervalDefaultsTo15() throws IOException {
+    Path configFile = configManager.getConfigFile();
+    Files.createDirectories(configFile.getParent());
+    Properties props = new Properties();
+    props.setProperty("refresh_interval_seconds", "abc");
+    try (OutputStream os = Files.newOutputStream(configFile)) {
+      props.store(os, "Config with non-numeric refresh interval");
+    }
+
+    configManager = new ConfigManager();
+    configManager.initialize();
+    assertEquals(15, configManager.getRefreshIntervalSeconds());
+  }
+
+  @Test
+  void testSetValidRefreshInterval() {
+    configManager.initialize();
+    configManager.setRefreshIntervalSeconds(60);
+    assertEquals(60, configManager.getRefreshIntervalSeconds());
+  }
+
+  @Test
+  void testSetInvalidRefreshIntervalBelowMinimum() {
+    configManager.initialize();
+    configManager.setRefreshIntervalSeconds(0); // Invalid
+    assertEquals(15, configManager.getRefreshIntervalSeconds());
+  }
+
+  @Test
+  void testRefreshIntervalPersistence() throws IOException {
+    configManager.initialize();
+    configManager.setRefreshIntervalSeconds(45);
+    configManager.save();
+
+    Properties loadedProps = new Properties();
+    try (var is = Files.newInputStream(configManager.getConfigFile())) {
+      loadedProps.load(is);
+    }
+    assertEquals("45", loadedProps.getProperty("refresh_interval_seconds"));
+
+    ConfigManager reloaded = new ConfigManager();
+    reloaded.initialize();
+    assertEquals(45, reloaded.getRefreshIntervalSeconds());
+  }
+
+  @Test
+  void testRefreshIntervalDefaultsWhenMissingInFile() throws IOException {
+    Path configFile = configManager.getConfigFile();
+    Files.createDirectories(configFile.getParent());
+    Properties props = new Properties();
+    props.setProperty("theme", "some-theme");
+    try (OutputStream os = Files.newOutputStream(configFile)) {
+      props.store(os, "Config without refresh interval");
+    }
+
+    configManager = new ConfigManager();
+    configManager.initialize();
+    assertEquals(15, configManager.getRefreshIntervalSeconds());
+  }
+
 }
 
