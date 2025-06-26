@@ -19,10 +19,10 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
 
 ## Visuals
 ### tokyo-night (default)
-![tokyo-night theme (default)](docs/screenshots/tokyo-night-2025-06-21-01.png)
+![tokyo-night theme (default)](docs/screenshots/tokyo-night-2025-06-26-01.png)
 
 ### everforest
-![everforest theme](docs/screenshots/everforest-2025-06-21-01.png)
+![everforest theme](docs/screenshots/everforest-2025-06-26-01.png)
 
 ## Quick Start
 
