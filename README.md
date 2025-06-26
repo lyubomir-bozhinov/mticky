@@ -5,6 +5,7 @@ A simple Java TUI app that allows us terminal-dwellers to monitor stock prices i
 ![Java](https://img.shields.io/badge/Java-17+-orange.svg)
 ![Maven](https://img.shields.io/badge/Maven-3.6+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
+[![Buy Me a Coffee](https://img.shields.io/badge/-Buy%20Me%20a%20Coffee-ffdd00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/lboz)
 
 ## Features
 
