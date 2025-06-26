@@ -339,8 +339,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 - 🐛 **Issues**: [GitHub Issues](https://github.com/lyubomir-bozhinov/mticky/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/lyubomir-bozhinov/mticky/discussions)
 
 ---
+
+## About Me
+
+I build things — products, teams, systems… occasionally IKEA furniture (with mixed results). I’ve led engineering in everything from scrappy startups to big enterprises, but what I really love is turning ideas into real, useful tech.
+
+I’m into mentoring, scaling systems, and solving problems that make people say “well, that’s impossible.” If you like what I’m building here, you can fuel my caffeine-powered code sessions:
+
+☕ [Buy Me a Coffee](https://www.buymeacoffee.com/lboz)
+
+Thanks for stopping by!
 
 **Happy Trading!** 📈
